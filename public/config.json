@@ -1,0 +1,6 @@
+
+{
+  "API_BASE_URL": "http://0.0.0.0:8000/api",
+  "SERVER_HOST": "0.0.0.0",
+  "SERVER_PORT": "8000"
+}

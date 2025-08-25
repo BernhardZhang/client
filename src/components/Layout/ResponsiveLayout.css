@@ -1,0 +1,252 @@
+/* 响应式布局样式 */
+.responsive-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部Header */
+.top-header {
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+/* 主内容区域 */
+.main-content {
+  flex: 1;
+  background: #f5f5f5;
+  padding-bottom: 70px; /* 为底部导航留出空间 */
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: calc(100vh - 140px);
+}
+
+/* 底部导航 */
+.bottom-navigation {
+  display: flex;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  height: 60px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 8px 4px;
+  position: relative;
+}
+
+.nav-item:hover {
+  background: #f5f5f5;
+}
+
+.nav-item.active {
+  color: #1890ff;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  background: #1890ff;
+  border-radius: 0 0 3px 3px;
+}
+
+.nav-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+  transition: transform 0.3s ease;
+}
+
+.nav-item.active .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-label {
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* 桌面端优化 */
+@media (min-width: 768px) {
+  .header-content {
+    padding: 16px 24px;
+  }
+  
+  .content-wrapper {
+    padding: 24px;
+  }
+  
+  .nav-label {
+    font-size: 12px;
+  }
+  
+  .nav-icon {
+    font-size: 22px;
+  }
+  
+  /* 桌面端底部导航可以稍微高一些 */
+  .bottom-navigation {
+    height: 65px;
+  }
+  
+  .main-content {
+    padding-bottom: 75px;
+  }
+}
+
+/* 大屏幕优化 */
+@media (min-width: 1024px) {
+  .content-wrapper {
+    padding: 32px;
+  }
+}
+
+/* 移动端优化 */
+@media (max-width: 767px) {
+  .desktop-only {
+    display: none !important;
+  }
+  
+  .header-content {
+    padding: 12px 16px;
+  }
+  
+  .content-wrapper {
+    padding: 12px;
+  }
+  
+  .nav-item {
+    padding: 6px 2px;
+  }
+  
+  .nav-icon {
+    font-size: 18px;
+  }
+  
+  .nav-label {
+    font-size: 9px;
+  }
+}
+
+/* 小程序环境优化 */
+@media (max-width: 480px) {
+  .logo {
+    font-size: 16px;
+  }
+  
+  .content-wrapper {
+    padding: 8px;
+  }
+  
+  .bottom-navigation {
+    height: 55px;
+  }
+  
+  .main-content {
+    padding-bottom: 65px;
+  }
+  
+  .nav-item {
+    padding: 4px 2px;
+  }
+  
+  .nav-icon {
+    font-size: 16px;
+  }
+  
+  .nav-label {
+    font-size: 8px;
+  }
+}
+
+/* 深色模式支持 (为小程序准备) */
+@media (prefers-color-scheme: dark) {
+  .top-header,
+  .bottom-navigation {
+    background: #1f1f1f;
+    border-color: #303030;
+  }
+  
+  .nav-item:hover {
+    background: #2a2a2a;
+  }
+  
+  .main-content {
+    background: #141414;
+  }
+}
+
+/* 安全区域适配 (为iPhone X等设备准备) */
+@supports (padding: max(0px)) {
+  .bottom-navigation {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+  
+  .main-content {
+    padding-bottom: calc(70px + max(0px, env(safe-area-inset-bottom)));
+  }
+}
+
+/* 横屏模式优化 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bottom-navigation {
+    height: 50px;
+  }
+  
+  .main-content {
+    padding-bottom: 60px;
+  }
+  
+  .nav-icon {
+    font-size: 16px;
+  }
+  
+  .nav-label {
+    font-size: 8px;
+  }
+}
