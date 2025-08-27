@@ -1,0 +1,412 @@
+/* 积分统计页面左中右布局样式 */
+.points-layout {
+  min-height: 100vh;
+  /* 重置全局样式，确保不受ResponsiveLayout影响 */
+  position: relative;
+  z-index: 1;
+}
+
+/* 确保积分统计页面不受ResponsiveLayout的顶部和底部导航影响 */
+.points-layout .top-header,
+.points-layout .bottom-navigation {
+  display: none !important;
+}
+
+.points-layout .main-content {
+  padding-bottom: 0 !important;
+}
+
+.points-layout .content-wrapper {
+  padding: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* 左侧导航栏样式 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 中间功能栏样式 */
+.middle-sider {
+  background: #fafafa !important;
+  border-right: 1px solid #f0f0f0;
+  margin-left: 200px;
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 999;
+  overflow-y: auto;
+}
+
+.left-sider.ant-layout-sider-collapsed + .middle-sider {
+  margin-left: 80px;
+}
+
+/* 右侧内容区域样式 */
+.right-content {
+  margin-left: 200px;
+  min-height: 100vh;
+  background: #f0f2f5;
+  transition: margin-left 0.2s;
+}
+
+.left-sider.ant-layout-sider-collapsed ~ .right-content {
+  margin-left: 80px;
+}
+
+/* 导航菜单样式 */
+.nav-menu {
+  border-right: 0;
+  flex: 1;
+}
+
+.nav-menu .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 6px;
+}
+
+.nav-menu .ant-menu-item-selected {
+  background-color: #1890ff !important;
+}
+
+/* 左侧导航栏样式调整 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* 为底部用户信息区域预留空间 */
+  padding-bottom: 80px;
+}
+
+/* 用户信息区域样式 */
+.user-info-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  border-top: 1px solid #303030;
+  background: #001529;
+  /* 确保不被折叠按钮遮挡 */
+  z-index: 1001;
+  /* 为折叠按钮留出空间 */
+  padding-bottom: 20px;
+}
+
+/* 功能面板样式 */
+.function-panel {
+  padding: 16px;
+}
+
+.function-panel .ant-card {
+  margin-bottom: 16px;
+}
+
+.function-panel .ant-statistic-title {
+  font-size: 12px;
+  color: #666;
+}
+
+.function-panel .ant-statistic-content {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 快捷操作按钮样式 */
+.quick-actions .ant-btn {
+  margin-bottom: 8px;
+  height: 36px;
+}
+
+/* 最近积分变动列表样式 */
+.function-panel .ant-list-item {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 0;
+}
+
+.function-panel .ant-list-item:last-child {
+  border-bottom: none;
+}
+
+/* 统计卡片样式 */
+.right-content .ant-statistic-title {
+  font-size: 14px;
+  color: #666;
+}
+
+.right-content .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* 等级信息样式 */
+.level-info .ant-avatar {
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.level-info .ant-tag {
+  border-radius: 12px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+/* 积分来源统计样式 */
+.points-source-stats .ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+}
+
+.points-source-stats .ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+/* 积分变动时间线样式 */
+.points-timeline .ant-timeline-item {
+  padding-bottom: 16px;
+}
+
+.points-timeline .ant-timeline-item-content {
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* 积分历史表格样式 */
+.points-history-table .ant-table {
+  background: #fff;
+  border-radius: 8px;
+}
+
+.points-history-table .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* 功分互评表格样式 */
+.evaluations-table .ant-table {
+  background: #fff;
+  border-radius: 8px;
+}
+
+.evaluations-table .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* 积分转账Modal样式 */
+.points-transfer-modal .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.points-transfer-modal .ant-input-number {
+  width: 100%;
+}
+
+.points-transfer-modal .ant-input-textarea {
+  resize: vertical;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .middle-sider {
+    width: 200px !important;
+  }
+  
+  .right-content {
+    margin-left: 400px;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed ~ .right-content {
+    margin-left: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .left-sider {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed {
+    transform: translateX(0);
+  }
+  
+  .middle-sider {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .right-content {
+    margin-left: 0;
+  }
+  
+  /* 移动端显示按钮 */
+  .mobile-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1001;
+    display: block;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-toggle {
+    display: none;
+  }
+}
+
+/* 滚动条样式 */
+.middle-sider::-webkit-scrollbar {
+  width: 4px;
+}
+
+.middle-sider::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.middle-sider::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.middle-sider::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 积分等级颜色样式 */
+.level-color-1 { color: #8c8c8c; } /* 新手 - 灰色 */
+.level-color-2 { color: #cd7f32; } /* 青铜 - 青铜色 */
+.level-color-3 { color: #c0c0c0; } /* 白银 - 银色 */
+.level-color-4 { color: #ffd700; } /* 黄金 - 金色 */
+.level-color-5 { color: #b9f2ff; } /* 钻石 - 钻石蓝 */
+
+/* 积分变动类型标签样式 */
+.points-change-tag {
+  border-radius: 12px;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+/* 积分数值样式 */
+.points-positive {
+  color: #52c41a;
+  font-weight: bold;
+}
+
+.points-negative {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+/* 空状态样式 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-state .ant-empty-description {
+  color: #999;
+  font-size: 14px;
+}
+
+/* 加载状态样式 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+/* Tab标签样式 */
+.right-content .ant-tabs-tab {
+  font-size: 14px;
+  padding: 12px 16px;
+}
+
+.right-content .ant-tabs-tab-active {
+  font-weight: 600;
+}
+
+/* 进度条样式 */
+.level-progress .ant-progress-text {
+  font-size: 12px;
+}
+
+/* 卡片悬停效果 */
+.hover-card {
+  transition: all 0.3s ease;
+}
+
+.hover-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+/* 积分统计卡片网格 */
+.points-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* 积分来源统计网格 */
+.points-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+/* 时间线容器样式 */
+.timeline-container {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.timeline-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.timeline-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

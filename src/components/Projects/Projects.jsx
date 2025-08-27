@@ -66,7 +66,7 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { Option } = Select;
 
-const Projects = ({ onProjectSelect }) => {
+const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy = 'create_time', sortOrder = 'desc' }) => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -74,11 +74,13 @@ const Projects = ({ onProjectSelect }) => {
   const [editingProject, setEditingProject] = useState(null);
   const [viewingProject, setViewingProject] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
-  const [sortBy, setSortBy] = useState('create_time');
-  const [sortOrder, setSortOrder] = useState('desc');
+  // 使用传入的排序参数，如果没有传入则使用默认值
+  const [internalSortBy, setInternalSortBy] = useState(sortBy);
+  const [internalSortOrder, setInternalSortOrder] = useState(sortOrder);
   const [pinnedProjects, setPinnedProjects] = useState([]);
   const [projectStats, setProjectStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 });
-  const [viewMode, setViewMode] = useState('card'); // 'card' 或 'table'
+  // 使用传入的viewMode，如果没有传入则使用默认值
+  const [internalViewMode, setInternalViewMode] = useState(viewMode);
   const [defaultDetailTab, setDefaultDetailTab] = useState('info'); // 默认详情页标签
   const fetchTimeoutRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
@@ -209,6 +211,13 @@ const Projects = ({ onProjectSelect }) => {
       filtered = filtered.filter(project => isProjectMember(project) && !isProjectOwner(project));
     }
     
+    // 搜索过滤
+    if (searchText) {
+      filtered = filtered.filter(project => 
+        project.name.toLowerCase().includes(searchText.toLowerCase()) ||
+        (project.description && project.description.toLowerCase().includes(searchText.toLowerCase()))
+      );
+    }
     
     // 排序
     filtered.sort((a, b) => {
@@ -220,10 +229,10 @@ const Projects = ({ onProjectSelect }) => {
       if (!aIsPinned && bIsPinned) return 1;
       
       // 按选定字段排序
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
+      const aValue = a[internalSortBy];
+      const bValue = b[internalSortBy];
       
-      if (sortOrder === 'asc') {
+      if (internalSortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
         return aValue < bValue ? 1 : -1;
@@ -665,125 +674,8 @@ const Projects = ({ onProjectSelect }) => {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}>项目管理</Title>
-        <Space>
-          <Button.Group>
-            <Button
-              type={viewMode === 'card' ? 'primary' : 'default'}
-              icon={<AppstoreOutlined />}
-              onClick={() => setViewMode('card')}
-            >
-              卡片视图
-            </Button>
-            <Button
-              type={viewMode === 'table' ? 'primary' : 'default'}
-              icon={<BarsOutlined />}
-              onClick={() => setViewMode('table')}
-            >
-              列表视图
-            </Button>
-          </Button.Group>
-          <Select
-            value={`${sortBy}_${sortOrder}`}
-            onChange={(value) => {
-              const [field, order] = value.split('_');
-              setSortBy(field);
-              setSortOrder(order);
-            }}
-            style={{ width: 150 }}
-          >
-            <Option value="create_time_desc">最新创建</Option>
-            <Option value="create_time_asc">最早创建</Option>
-            <Option value="name_asc">名称A-Z</Option>
-            <Option value="name_desc">名称Z-A</Option>
-            <Option value="progress_desc">进度高-低</Option>
-            <Option value="progress_asc">进度低-高</Option>
-          </Select>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreateProject}
-          >
-            创建项目
-          </Button>
-        </Space>
-      </Row>
-
-      {/* 统计面板 */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="总项目"
-              value={projectStats.total}
-              prefix={<ProjectOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="进行中"
-              value={projectStats.active}
-              valueStyle={{ color: '#3f8600' }}
-              prefix={<BarChartOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="已完成"
-              value={projectStats.completed}
-              valueStyle={{ color: '#1890ff' }}
-              prefix={<FileTextOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="待审核"
-              value={projectStats.pending}
-              valueStyle={{ color: '#faad14' }}
-              prefix={<CalendarOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="总估值"
-              value={projectStats.totalValuation || 0}
-              precision={2}
-              valueStyle={{ color: '#722ed1' }}
-              prefix="¥"
-              suffix="元"
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card>
-            <Statistic
-              title="融资轮次"
-              value={projectStats.fundingRounds || 0}
-              valueStyle={{ color: '#eb2f96' }}
-              suffix="轮"
-            />
-          </Card>
-        </Col>
-      </Row>
-
-
-      <Card>
-        <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <Tabs.TabPane tab="全部项目" key="all" />
-          <Tabs.TabPane tab="我创建的" key="created" />
-          <Tabs.TabPane tab="我参与的" key="joined" />
-        </Tabs>
-
-        {viewMode === 'card' ? (
+      {/* 项目列表内容 */}
+      {internalViewMode === 'card' ? (
           <ProjectCardGrid
             projects={getFilteredProjects()}
             loading={isLoading}
@@ -817,7 +709,6 @@ const Projects = ({ onProjectSelect }) => {
             }}
           />
         )}
-      </Card>
 
       <Modal
         title={editingProject ? '编辑项目' : '创建项目'}

@@ -1,0 +1,352 @@
+/* 项目大厅页面左中右布局样式 */
+.project-hall-layout {
+  min-height: 100vh;
+  /* 重置全局样式，确保不受ResponsiveLayout影响 */
+  position: relative;
+  z-index: 1;
+}
+
+/* 确保项目大厅页面不受ResponsiveLayout的顶部和底部导航影响 */
+.project-hall-layout .top-header,
+.project-hall-layout .bottom-navigation {
+  display: none !important;
+}
+
+.task-hall-layout .main-content {
+  padding-bottom: 0 !important;
+}
+
+.task-hall-layout .content-wrapper {
+  padding: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* 左侧导航栏样式 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 中间功能栏样式 */
+.middle-sider {
+  background: #fafafa !important;
+  border-right: 1px solid #f0f0f0;
+  margin-left: 200px;
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 999;
+  overflow-y: auto;
+}
+
+.left-sider.ant-layout-sider-collapsed + .middle-sider {
+  margin-left: 80px;
+}
+
+/* 右侧内容区域样式 */
+.right-content {
+  margin-left: 200px;
+  min-height: 100vh;
+  background: #f0f2f5;
+  transition: margin-left 0.2s;
+}
+
+.left-sider.ant-layout-sider-collapsed ~ .right-content {
+  margin-left: 80px;
+}
+
+/* 导航菜单样式 */
+.nav-menu {
+  border-right: 0;
+  flex: 1;
+}
+
+.nav-menu .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 6px;
+}
+
+.nav-menu .ant-menu-item-selected {
+  background-color: #1890ff !important;
+}
+
+/* 左侧导航栏样式调整 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* 为底部用户信息区域预留空间 */
+  padding-bottom: 80px;
+}
+
+/* 用户信息区域样式 */
+.user-info-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  border-top: 1px solid #303030;
+  background: #001529;
+  /* 确保不被折叠按钮遮挡 */
+  z-index: 1001;
+  /* 为折叠按钮留出空间 */
+  padding-bottom: 20px;
+}
+
+/* 功能面板样式 */
+.function-panel {
+  padding: 16px;
+}
+
+.function-panel .ant-card {
+  margin-bottom: 16px;
+}
+
+.function-panel .ant-statistic-title {
+  font-size: 12px;
+  color: #666;
+}
+
+.function-panel .ant-statistic-content {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 快捷操作按钮样式 */
+.quick-actions .ant-btn {
+  margin-bottom: 8px;
+  height: 36px;
+}
+
+/* 最近任务列表样式 */
+.function-panel .ant-list-item {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 0;
+}
+
+.function-panel .ant-list-item:last-child {
+  border-bottom: none;
+}
+
+/* 搜索栏样式 */
+.right-content .ant-input-search {
+  max-width: 400px;
+}
+
+/* 统计卡片样式 */
+.right-content .ant-statistic-title {
+  font-size: 14px;
+  color: #666;
+}
+
+.right-content .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* 任务表格样式 */
+.right-content .ant-table {
+  background: #fff;
+  border-radius: 8px;
+}
+
+.right-content .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* 任务标签样式 */
+.task-priority-tag {
+  border-radius: 12px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+/* 任务操作按钮样式 */
+.task-actions .ant-btn {
+  margin-right: 8px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .middle-sider {
+    width: 200px !important;
+  }
+  
+  .right-content {
+    margin-left: 400px;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed ~ .right-content {
+    margin-left: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .left-sider {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed {
+    transform: translateX(0);
+  }
+  
+  .middle-sider {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .right-content {
+    margin-left: 0;
+  }
+  
+  /* 移动端显示按钮 */
+  .mobile-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1001;
+    display: block;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-toggle {
+    display: none;
+  }
+}
+
+/* 滚动条样式 */
+.middle-sider::-webkit-scrollbar {
+  width: 4px;
+}
+
+.middle-sider::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.middle-sider::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.middle-sider::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 任务详情Modal样式 */
+.task-detail-modal .ant-descriptions-item-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.task-detail-modal .ant-descriptions-item-content {
+  color: #666;
+}
+
+/* 空状态样式 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-state .ant-empty-description {
+  color: #999;
+  font-size: 14px;
+}
+
+/* 加载状态样式 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+/* 分页样式 */
+.pagination-container {
+  text-align: center;
+  margin-top: 16px;
+  padding: 16px 0;
+}
+
+/* 任务卡片样式 */
+.task-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  margin-bottom: 16px;
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+/* 任务标题样式 */
+.task-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+/* 任务描述样式 */
+.task-description {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+/* 任务元信息样式 */
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #999;
+  font-size: 12px;
+}
+
+.task-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 任务标签容器样式 */
+.task-tags {
+  margin-top: 8px;
+}
+
+.task-tags .ant-tag {
+  margin-right: 8px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  font-size: 11px;
+  padding: 2px 8px;
+}

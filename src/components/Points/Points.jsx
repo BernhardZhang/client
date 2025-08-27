@@ -22,6 +22,10 @@ import {
   Badge,
   Tooltip,
   Divider,
+  Layout,
+  Menu,
+  List,
+  Empty
 } from 'antd';
 import {
   TrophyOutlined,
@@ -35,20 +39,35 @@ import {
   CalendarOutlined,
   PlusOutlined,
   SendOutlined,
+  HomeOutlined,
+  ProjectOutlined,
+  CheckCircleOutlined,
+  DollarOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  BellOutlined,
+  MessageOutlined,
+  FileTextOutlined,
+  BarChartOutlined
 } from '@ant-design/icons';
+import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 import usePointsStore from '../../stores/pointsStore';
 import dayjs from 'dayjs';
+import './Points.css';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { Sider, Content } = Layout;
 
 const Points = () => {
-  const [transferModalVisible, setTransferModalVisible] = useState(false);
-  const [transferForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('overview');
+  const [collapsed, setCollapsed] = useState(false);
   
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const {
     userPoints,
     pointsHistory,
@@ -57,7 +76,6 @@ const Points = () => {
     fetchPointsSummary,
     fetchPointsHistory,
     fetchEvaluations,
-    transferPoints,
     isLoading
   } = usePointsStore();
 
@@ -69,21 +87,11 @@ const Points = () => {
     }
   }, [user, fetchPointsSummary, fetchPointsHistory, fetchEvaluations]);
 
-  const handleTransferPoints = async (values) => {
-    try {
-      const result = await transferPoints(values);
-      if (result.success !== false) {
-        message.success('积分转账成功！');
-        setTransferModalVisible(false);
-        transferForm.resetFields();
-        fetchPointsSummary();
-        fetchPointsHistory();
-      } else {
-        message.error(result.error || '转账失败');
-      }
-    } catch (error) {
-      message.error('转账失败');
-    }
+
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
   };
 
   const getLevelColor = (level) => {
@@ -119,6 +127,83 @@ const Points = () => {
     };
     return colors[changeType] || 'default';
   };
+
+  // 主导航菜单项
+  const mainNavItems = [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: '首页',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: '项目管理',
+    },
+    {
+      key: '/task-hall',
+      icon: <CheckCircleOutlined />,
+      label: '任务大厅',
+    },
+    {
+      key: '/points',
+      icon: <StarOutlined />,
+      label: '积分统计',
+    },
+    {
+      key: '/finance',
+      icon: <DollarOutlined />,
+      label: '财务管理',
+    },
+    {
+      key: '/evaluation',
+      icon: <BarChartOutlined />,
+      label: '数据分析',
+    },
+  ];
+
+  // 功能菜单项
+  const functionItems = [
+    {
+      key: 'notifications',
+      icon: <BellOutlined />,
+      label: '消息通知',
+    },
+    {
+      key: 'messages',
+      icon: <MessageOutlined />,
+      label: '私信',
+    },
+    {
+      key: 'documents',
+      icon: <FileTextOutlined />,
+      label: '文档中心',
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    },
+  ];
+
+  const handleMenuClick = ({ key }) => {
+    if (key === 'logout') {
+      handleLogout();
+    } else if (key.startsWith('/')) {
+      navigate(key);
+    }
+  };
+
+  // 积分统计
+  const pointsStats = {
+    total: userPoints?.total_points || 0,
+    available: userPoints?.available_points || 0,
+    used: userPoints?.used_points || 0,
+    level: userPoints?.level || 1
+  };
+
+  // 最近积分变动
+  const recentPointsHistory = pointsHistory?.slice(0, 5) || [];
 
   const historyColumns = [
     {
@@ -242,272 +327,338 @@ const Points = () => {
   ];
 
   return (
-    <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}>积分中心</Title>
-        <Button 
-          type="primary" 
-          icon={<SendOutlined />}
-          onClick={() => setTransferModalVisible(true)}
-        >
-          积分转账
-        </Button>
-      </Row>
-
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <Tabs.TabPane tab="积分概览" key="overview">
-          {userPoints && (
-            <>
-              {/* 积分概览卡片 */}
-              <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="总积分"
-                      value={userPoints.total_points}
-                      prefix={<TrophyOutlined />}
-                      valueStyle={{ color: '#1890ff' }}
-                    />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="可用积分"
-                      value={userPoints.available_points}
-                      prefix={<GiftOutlined />}
-                      valueStyle={{ color: '#52c41a' }}
-                    />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="已使用积分"
-                      value={userPoints.used_points}
-                      prefix={<SwapOutlined />}
-                      valueStyle={{ color: '#faad14' }}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-
-              {/* 等级信息 */}
-              <Card style={{ marginBottom: 24 }}>
-                <Row align="middle">
-                  <Col span={4}>
-                    <div style={{ textAlign: 'center' }}>
-                      <Avatar 
-                        size={80} 
-                        style={{ 
-                          backgroundColor: getLevelColor(userPoints.level),
-                          fontSize: 32
-                        }}
-                        icon={getLevelIcon(userPoints.level)}
-                      />
-                    </div>
-                  </Col>
-                  <Col span={20}>
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <div>
-                        <Title level={3} style={{ margin: 0, display: 'inline-block' }}>
-                          {userPoints.level_name} 等级
-                        </Title>
-                        <Tag 
-                          color={getLevelColor(userPoints.level)}
-                          style={{ marginLeft: 8 }}
-                        >
-                          Lv.{userPoints.level}
-                        </Tag>
-                      </div>
-                      <div>
-                        <Text type="secondary">
-                          当前积分: {userPoints.total_points} 分
-                        </Text>
-                      </div>
-                      {/* 升级进度条 */}
-                      {userPoints.level < 5 && (
-                        <div style={{ width: '60%' }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            距离下一等级还需积分: 
-                          </Text>
-                          <Progress 
-                            percent={Math.min(100, (userPoints.total_points % 1000) / 10)}
-                            size="small"
-                            style={{ marginTop: 4 }}
-                          />
-                        </div>
-                      )}
-                    </Space>
-                  </Col>
-                </Row>
-              </Card>
-
-              {/* 积分来源统计 */}
-              {earnStats && earnStats.length > 0 && (
-                <Card title="积分来源统计" style={{ marginBottom: 24 }}>
-                  <Row gutter={16}>
-                    {earnStats.map((stat, index) => (
-                      <Col span={8} key={index}>
-                        <Card size="small">
-                          <Statistic
-                            title={stat.reason}
-                            value={stat.total_points}
-                            suffix={`(${stat.count}次)`}
-                            valueStyle={{ fontSize: 16 }}
-                          />
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                </Card>
-              )}
-
-              {/* 最近积分变动 */}
-              <Card title="最近积分变动">
-                {pointsHistory && pointsHistory.length > 0 ? (
-                  <Timeline>
-                    {pointsHistory.slice(0, 8).map(record => (
-                      <Timeline.Item
-                        key={record.id}
-                        color={record.points > 0 ? 'green' : 'red'}
-                      >
-                        <Space direction="vertical" size="small">
-                          <Space>
-                            <Tag color={getChangeTypeColor(record.change_type)}>
-                              {record.change_type_display}
-                            </Tag>
-                            <Text style={{ 
-                              color: record.points > 0 ? '#52c41a' : '#ff4d4f',
-                              fontWeight: 'bold'
-                            }}>
-                              {record.points > 0 ? '+' : ''}{record.points}分
-                            </Text>
-                          </Space>
-                          <Text>{record.reason}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {dayjs(record.created_at).format('MM-DD HH:mm')}
-                            {record.related_project_name && (
-                              <Tag color="blue" size="small" style={{ marginLeft: 8 }}>
-                                {record.related_project_name}
-                              </Tag>
-                            )}
-                          </Text>
-                        </Space>
-                      </Timeline.Item>
-                    ))}
-                  </Timeline>
-                ) : (
-                  <Text type="secondary">暂无积分变动记录</Text>
-                )}
-              </Card>
-            </>
-          )}
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab="积分历史" key="history">
-          <Card>
-            <Table
-              columns={historyColumns}
-              dataSource={pointsHistory}
-              rowKey="id"
-              loading={isLoading}
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total) => `共 ${total} 条记录`,
-              }}
-            />
-          </Card>
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab="功分互评" key="evaluations">
-          <Card>
-            <Table
-              columns={evaluationColumns}
-              dataSource={evaluations}
-              rowKey="id"
-              loading={isLoading}
-              pagination={{
-                pageSize: 10,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total) => `共 ${total} 个评分活动`,
-              }}
-            />
-          </Card>
-        </Tabs.TabPane>
-      </Tabs>
-
-      {/* 积分转账Modal */}
-      <Modal
-        title="积分转账"
-        open={transferModalVisible}
-        onOk={() => transferForm.submit()}
-        onCancel={() => {
-          setTransferModalVisible(false);
-          transferForm.resetFields();
-        }}
-        confirmLoading={isLoading}
+    <Layout className="points-layout">
+      {/* 左侧总导航栏 */}
+      <Sider 
+        width={200} 
+        collapsible 
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        className="left-sider"
       >
-        <Form
-          form={transferForm}
-          layout="vertical"
-          onFinish={handleTransferPoints}
-        >
-          <Form.Item
-            name="to_user"
-            label="接收用户ID"
-            rules={[
-              { required: true, message: '请输入接收用户ID' },
-              { type: 'number', message: '请输入有效的用户ID' }
-            ]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="请输入要转账的用户ID"
-              min={1}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="points"
-            label="转账积分"
-            rules={[
-              { required: true, message: '请输入转账积分数量' },
-              { type: 'number', min: 1, message: '转账积分必须大于0' }
-            ]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="请输入转账积分数量"
-              min={1}
-              max={userPoints?.available_points || 0}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="reason"
-            label="转账说明"
-          >
-            <Input.TextArea
-              rows={3}
-              placeholder="请输入转账说明（可选）"
-              maxLength={200}
-            />
-          </Form.Item>
-
-          {userPoints && (
-            <div style={{ padding: 12, backgroundColor: '#f6f6f6', borderRadius: 4 }}>
-              <Text type="secondary">
-                可用积分: <Text strong>{userPoints.available_points}</Text> 分
-              </Text>
+        <div style={{ 
+          height: '64px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          borderBottom: '1px solid #303030'
+        }}>
+          <Text strong style={{ 
+            fontSize: collapsed ? '16px' : '18px', 
+            color: '#fff',
+            whiteSpace: 'nowrap'
+          }}>
+            {collapsed ? '功分' : '功分易'}
+          </Text>
+        </div>
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={mainNavItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        <Divider style={{ margin: '16px 0', borderColor: '#303030' }} />
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          items={functionItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        {/* 用户信息区域 */}
+        <div className="user-info-area">
+          {isAuthenticated() ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" src={user?.avatar} icon={<UserOutlined />} />
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#fff', fontSize: '12px' }} ellipsis>
+                    {user?.username}
+                  </Text>
+                  <div>
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LogoutOutlined />}
+                      onClick={handleLogout}
+                      style={{ color: '#fff', padding: 0, height: 'auto' }}
+                    >
+                      {!collapsed && '退出'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" icon={<UserOutlined />} />
+              {!collapsed && (
+                <div>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<LoginOutlined />}
+                    style={{ color: '#fff', padding: 0, height: 'auto' }}
+                  >
+                    登录
+                  </Button>
+                </div>
+              )}
             </div>
           )}
-        </Form>
-      </Modal>
-    </div>
+        </div>
+      </Sider>
+
+
+
+      {/* 右侧内容栏 */}
+      <Layout>
+        <Content className="right-content" style={{ 
+          padding: '24px', 
+          overflow: 'auto'
+        }}>
+          {/* 顶部标题 */}
+          <div style={{ marginBottom: '24px' }}>
+            <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
+              <Title level={2} style={{ margin: 0 }}>
+                <TrophyOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+                积分统计
+              </Title>
+            </Row>
+          </div>
+
+          <Tabs activeKey={activeTab} onChange={setActiveTab}>
+            <Tabs.TabPane tab="项目积分概览" key="overview">
+              {userPoints && (
+                <>
+                  {/* 快速统计 */}
+                  <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                    <Col xs={12} sm={6}>
+                      <Card>
+                        <Statistic
+                          title="总积分"
+                          value={userPoints.total_points}
+                          prefix={<TrophyOutlined />}
+                          valueStyle={{ color: '#1890ff' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                      <Card>
+                        <Statistic
+                          title="可用积分"
+                          value={userPoints.available_points}
+                          prefix={<GiftOutlined />}
+                          valueStyle={{ color: '#52c41a' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                      <Card>
+                        <Statistic
+                          title="已使用积分"
+                          value={userPoints.used_points}
+                          prefix={<SwapOutlined />}
+                          valueStyle={{ color: '#faad14' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                      <Card>
+                        <Statistic
+                          title="当前等级"
+                          value={`Lv.${userPoints.level || 1}`}
+                          prefix={<CrownOutlined />}
+                          valueStyle={{ color: '#722ed1' }}
+                        />
+                      </Card>
+                    </Col>
+                  </Row>
+
+                  {/* 快捷操作 */}
+                  <Card style={{ marginBottom: '24px' }}>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Button 
+                          type="primary" 
+                          block 
+                          icon={<HistoryOutlined />}
+                          onClick={() => setActiveTab('history')}
+                        >
+                          查看历史
+                        </Button>
+                      </Col>
+                      <Col span={12}>
+                        <Button 
+                          block 
+                          icon={<TrophyOutlined />}
+                        >
+                          等级详情
+                        </Button>
+                      </Col>
+                    </Row>
+                  </Card>
+
+
+
+                  {/* 等级信息 */}
+                  <Card style={{ marginBottom: '24px' }}>
+                    <Row align="middle">
+                      <Col span={4}>
+                        <div style={{ textAlign: 'center' }}>
+                          <Avatar 
+                            size={80} 
+                            style={{ 
+                              backgroundColor: getLevelColor(userPoints.level),
+                              fontSize: 32
+                            }}
+                            icon={getLevelIcon(userPoints.level)}
+                          />
+                        </div>
+                      </Col>
+                      <Col span={20}>
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <div>
+                            <Title level={3} style={{ margin: 0, display: 'inline-block' }}>
+                              {userPoints.level_name} 等级
+                            </Title>
+                            <Tag 
+                              color={getLevelColor(userPoints.level)}
+                              style={{ marginLeft: 8 }}
+                            >
+                              Lv.{userPoints.level}
+                            </Tag>
+                          </div>
+                          <div>
+                            <Text type="secondary">
+                              当前积分: {userPoints.total_points} 分
+                            </Text>
+                          </div>
+                          {/* 升级进度条 */}
+                          {userPoints.level < 5 && (
+                            <div style={{ width: '60%' }}>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                距离下一等级还需积分: 
+                              </Text>
+                              <Progress 
+                                percent={Math.min(100, (userPoints.total_points % 1000) / 10)}
+                                size="small"
+                                style={{ marginTop: 4 }}
+                              />
+                            </div>
+                          )}
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
+
+                  {/* 项目积分统计 */}
+                  {earnStats && earnStats.length > 0 && (
+                    <Card title="项目积分统计" style={{ marginBottom: '24px' }}>
+                      <Row gutter={16}>
+                        {earnStats.map((stat, index) => (
+                          <Col span={8} key={index}>
+                            <Card size="small">
+                              <Statistic
+                                title={stat.reason}
+                                value={stat.total_points}
+                                suffix={`(${stat.count}次)`}
+                                valueStyle={{ fontSize: 16 }}
+                              />
+                            </Card>
+                          </Col>
+                        ))}
+                      </Row>
+                    </Card>
+                  )}
+
+                  {/* 最近项目积分变动 */}
+                  <Card title="最近项目积分变动">
+                    {pointsHistory && pointsHistory.length > 0 ? (
+                      <Timeline>
+                        {pointsHistory.slice(0, 8).map(record => (
+                          <Timeline.Item
+                            key={record.id}
+                            color={record.points > 0 ? 'green' : 'red'}
+                          >
+                            <Space direction="vertical" size="small">
+                              <Space>
+                                <Tag color={getChangeTypeColor(record.change_type)}>
+                                  {record.change_type_display}
+                                </Tag>
+                                <Text style={{ 
+                                  color: record.points > 0 ? '#52c41a' : '#ff4d4f',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {record.points > 0 ? '+' : ''}{record.points}分
+                                </Text>
+                              </Space>
+                              <Text>{record.reason}</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {dayjs(record.created_at).format('MM-DD HH:mm')}
+                                {record.related_project_name && (
+                                  <Tag color="blue" size="small" style={{ marginLeft: 8 }}>
+                                    {record.related_project_name}
+                                  </Tag>
+                                )}
+                              </Text>
+                            </Space>
+                          </Timeline.Item>
+                        ))}
+                      </Timeline>
+                    ) : (
+                      <Text type="secondary">暂无积分变动记录</Text>
+                    )}
+                  </Card>
+                </>
+              )}
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab="项目积分历史" key="history">
+              <Card>
+                <Table
+                  columns={historyColumns}
+                  dataSource={pointsHistory}
+                  rowKey="id"
+                  loading={isLoading}
+                  pagination={{
+                    pageSize: 20,
+                    showSizeChanger: true,
+                    showQuickJumper: true,
+                    showTotal: (total) => `共 ${total} 条记录`,
+                  }}
+                />
+              </Card>
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab="功分互评" key="evaluations">
+              <Card>
+                <Table
+                  columns={evaluationColumns}
+                  dataSource={evaluations}
+                  rowKey="id"
+                  loading={isLoading}
+                  pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    showQuickJumper: true,
+                    showTotal: (total) => `共 ${total} 个评分活动`,
+                  }}
+                />
+              </Card>
+            </Tabs.TabPane>
+          </Tabs>
+        </Content>
+      </Layout>
+
+
+    </Layout>
   );
 };
 

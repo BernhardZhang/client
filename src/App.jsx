@@ -36,15 +36,30 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
-            {/* 所有页面都使用ResponsiveLayout，底端菜单始终显示 */}
-            <Route path="/" element={<ResponsiveLayout />}>
-              <Route index element={<PublicHome />} />
-              <Route path="projects" element={<IntegratedProjectManagement />} />
-              <Route path="task-hall" element={<TaskHall />} />
-              <Route path="points" element={<Points />} />
-              <Route path="finance" element={<Finance />} />
-              <Route path="evaluation" element={<DataAnalysis />} />
-              <Route path="dashboard" element={<Dashboard />} />
+            {/* 首页使用新的左中右布局 */}
+            <Route path="/" element={<PublicHome />} />
+            
+            {/* 项目管理页面使用新的左中右布局 */}
+            <Route path="/projects" element={<IntegratedProjectManagement />} />
+            
+            {/* 任务大厅页面使用新的左中右布局 */}
+            <Route path="/task-hall" element={<TaskHall />} />
+            
+            {/* 项目大厅页面使用新的左中右布局 */}
+            <Route path="/project-hall" element={<TaskHall />} />
+            
+            {/* 积分系统页面使用新的左中右布局 */}
+            <Route path="/points" element={<Points />} />
+            
+            {/* 财务管理页面使用新的左中右布局 */}
+            <Route path="/finance" element={<Finance />} />
+            
+            {/* 数据分析页面使用新的左中右布局 */}
+            <Route path="/evaluation" element={<DataAnalysis />} />
+            
+            {/* 其他页面使用ResponsiveLayout */}
+            <Route path="/dashboard" element={<ResponsiveLayout />}>
+              <Route index element={<Dashboard />} />
             </Route>
             
             {/* 项目详情页 */}

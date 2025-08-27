@@ -18,6 +18,11 @@ import {
   Switch,
   Descriptions,
   Empty,
+  Layout,
+  Menu,
+  Divider,
+  List,
+  Avatar
 } from 'antd';
 import {
   DollarOutlined,
@@ -25,7 +30,19 @@ import {
   ShareAltOutlined,
   EyeOutlined,
   PlusOutlined,
+  HomeOutlined,
+  ProjectOutlined,
+  CheckCircleOutlined,
+  StarOutlined,
+  BarChartOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  BellOutlined,
+  MessageOutlined,
+  UserOutlined
 } from '@ant-design/icons';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import LoginPrompt from '../Auth/LoginPrompt';
 import useAuthStore from '../../stores/authStore';
@@ -33,21 +50,24 @@ import useVotingStore from '../../stores/votingStore';
 import { financeAPI } from '../../services/api';
 import FinancialReports from './FinancialReports';
 import EquityCalculation from './EquityCalculation';
+import './Finance.css';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { Sider, Content } = Layout;
 
 const Finance = () => {
-  const [form] = Form.useForm();
-  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [reports, setReports] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [equity, setEquity] = useState([]);
-  const [portfolio, setPortfolio] = useState(null);
-  const [showAllReports, setShowAllReports] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [rechargeModalVisible, setRechargeModalVisible] = useState(false);
+  const [rechargeForm] = Form.useForm();
   
-  const { user, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const { activeRound, fetchActiveRound } = useVotingStore();
 
   useEffect(() => {
@@ -58,6 +78,33 @@ const Finance = () => {
 
   const handleLoginRequired = () => {
     setShowLoginPrompt(true);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  const handleRecharge = async (values) => {
+    try {
+      // 这里应该是实际的充值API调用
+      message.success(`充值成功！充值金额：¥${values.amount}`);
+      setRechargeModalVisible(false);
+      rechargeForm.resetFields();
+      
+      // 添加新的充值记录到交易列表
+      const newTransaction = {
+        id: transactions.length + 1,
+        type: '充值',
+        amount: values.amount,
+        description: `${values.paymentMethod}充值`,
+        date: new Date().toISOString().split('T')[0]
+      };
+      setTransactions(prev => [newTransaction, ...prev]);
+      
+    } catch (error) {
+      message.error('充值失败，请重试');
+    }
   };
 
   // 模拟数据加载函数
@@ -85,8 +132,10 @@ const Finance = () => {
       ]);
       
       setTransactions([
-        { id: 1, type: '收入', amount: 5000, description: '项目收入', date: '2024-01-15' },
-        { id: 2, type: '支出', amount: 1000, description: '运营成本', date: '2024-01-16' }
+        { id: 1, type: '充值', amount: 1000, description: '支付宝充值', date: '2024-01-15' },
+        { id: 2, type: '充值', amount: 2000, description: '微信充值', date: '2024-01-16' },
+        { id: 3, type: '充值', amount: 1500, description: '银行卡充值', date: '2024-01-17' },
+        { id: 4, type: '充值', amount: 500, description: '支付宝充值', date: '2024-01-18' }
       ]);
       
       setEquity([
@@ -100,42 +149,73 @@ const Finance = () => {
     }
   };
 
-  // 根据登录状态显示不同的按钮和操作
-  const renderFinanceActions = () => {
-    if (!isAuthenticated()) {
-      return (
-        <Space>
-          <Button onClick={handleLoginRequired}>
-            登录后管理财务
-          </Button>
-        </Space>
-      );
-    }
+  // 主导航菜单项
+  const mainNavItems = [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: '首页',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: '项目管理',
+    },
+    {
+      key: '/task-hall',
+      icon: <CheckCircleOutlined />,
+      label: '任务大厅',
+    },
+    {
+      key: '/points',
+      icon: <StarOutlined />,
+      label: '积分统计',
+    },
+    {
+      key: '/finance',
+      icon: <DollarOutlined />,
+      label: '财务管理',
+    },
+    {
+      key: '/evaluation',
+      icon: <BarChartOutlined />,
+      label: '数据分析',
+    },
+  ];
 
-    return (
-      <Space>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsReportModalVisible(true)}
-        >
-          创建报表
-        </Button>
-      </Space>
-    );
+  // 功能菜单项
+  const functionItems = [
+    {
+      key: 'notifications',
+      icon: <BellOutlined />,
+      label: '消息通知',
+    },
+    {
+      key: 'messages',
+      icon: <MessageOutlined />,
+      label: '私信',
+    },
+    {
+      key: 'documents',
+      icon: <FileTextOutlined />,
+      label: '文档中心',
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    },
+  ];
+
+  const handleMenuClick = ({ key }) => {
+    if (key === 'logout') {
+      handleLogout();
+    } else if (key.startsWith('/')) {
+      navigate(key);
+    }
   };
 
-  const handleCreateReport = async (values) => {
-    try {
-      // 创建报表的逻辑
-      message.success('财务报表创建成功！');
-      setIsReportModalVisible(false);
-      form.resetFields();
-      loadFinanceData();
-    } catch (error) {
-      message.error('创建失败，请重试');
-    }
-  };
+
 
   // 财务概览数据
   const financialOverview = {
@@ -145,60 +225,17 @@ const Finance = () => {
     reportCount: reports.length
   };
 
+  // 最近交易记录
+  const recentTransactions = transactions.slice(0, 5);
+
   const tabItems = [
     {
       key: 'overview',
-      label: '财务概览',
+      label: '项目财务概览',
       children: (
         <div>
-          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总收入"
-                  value={financialOverview.totalRevenue}
-                  prefix={<DollarOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                  suffix="元"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总成本"
-                  value={financialOverview.totalCosts}
-                  prefix={<FileTextOutlined />}
-                  valueStyle={{ color: '#fa8c16' }}
-                  suffix="元"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="净利润"
-                  value={financialOverview.totalProfit}
-                  prefix={<ShareAltOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                  suffix="元"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="报表数量"
-                  value={financialOverview.reportCount}
-                  prefix={<EyeOutlined />}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-          
           {reports.length > 0 && (
-            <Card title="收入分布图">
+            <Card title="项目收入分布图">
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -225,7 +262,7 @@ const Finance = () => {
     },
     {
       key: 'reports',
-      label: '财务报表',
+      label: '项目财务报表',
       children: (
         <Card>
           <Table
@@ -263,7 +300,7 @@ const Finance = () => {
     },
     {
       key: 'transactions',
-      label: '交易记录',
+      label: '充值记录',
       children: (
         <Card>
           <Table
@@ -274,7 +311,7 @@ const Finance = () => {
                 dataIndex: 'type', 
                 key: 'type',
                 render: (type) => (
-                  <Tag color={type === '收入' ? 'green' : 'red'}>{type}</Tag>
+                  <Tag color="green">{type}</Tag>
                 )
               },
               { 
@@ -283,8 +320,8 @@ const Finance = () => {
                 key: 'amount',
                 render: (value) => `¥${value.toLocaleString()}`
               },
-              { title: '描述', dataIndex: 'description', key: 'description' },
-              { title: '日期', dataIndex: 'date', key: 'date' }
+              { title: '充值方式', dataIndex: 'description', key: 'description' },
+              { title: '充值日期', dataIndex: 'date', key: 'date' }
             ]}
             pagination={{ pageSize: 10 }}
           />
@@ -315,52 +352,217 @@ const Finance = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}>财务管理系统</Title>
-        {renderFinanceActions()}
-      </Row>
+    <Layout className="finance-layout">
+      {/* 左侧总导航栏 */}
+      <Sider 
+        width={200} 
+        collapsible 
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        className="left-sider"
+      >
+        <div style={{ 
+          height: '64px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          borderBottom: '1px solid #303030'
+        }}>
+          <Text strong style={{ 
+            fontSize: collapsed ? '16px' : '18px', 
+            color: '#fff',
+            whiteSpace: 'nowrap'
+          }}>
+            {collapsed ? '功分' : '功分易'}
+          </Text>
+        </div>
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={mainNavItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        <Divider style={{ margin: '16px 0', borderColor: '#303030' }} />
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          items={functionItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        {/* 用户信息区域 */}
+        <div className="user-info-area">
+          {isAuthenticated() ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" src={user?.avatar} icon={<UserOutlined />} />
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#fff', fontSize: '12px' }} ellipsis>
+                    {user?.username}
+                  </Text>
+                  <div>
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LogoutOutlined />}
+                      onClick={handleLogout}
+                      style={{ color: '#fff', padding: 0, height: 'auto' }}
+                    >
+                      {!collapsed && '退出'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" icon={<UserOutlined />} />
+              {!collapsed && (
+                <div>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<LoginOutlined />}
+                    style={{ color: '#fff', padding: 0, height: 'auto' }}
+                  >
+                    登录
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Sider>
 
-      {/* 财务数据显示区域 */}
-      <Tabs defaultActiveKey="overview" items={tabItems} />
 
-      {/* 创建报表Modal - 只有登录用户才能看到 */}
+
+      {/* 右侧内容栏 */}
+      <Layout>
+        <Content className="right-content" style={{ 
+          padding: '24px', 
+          overflow: 'auto'
+        }}>
+          {/* 顶部标题 */}
+          <div style={{ marginBottom: '24px' }}>
+            <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
+              <Title level={2} style={{ margin: 0 }}>
+                <DollarOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+                财务统计
+              </Title>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />}
+                onClick={() => setRechargeModalVisible(true)}
+              >
+                充值
+              </Button>
+            </Row>
+          </div>
+
+          {/* 快速统计 */}
+          <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="项目总收入"
+                  value={financialOverview.totalRevenue}
+                  prefix={<DollarOutlined />}
+                  valueStyle={{ color: '#52c41a' }}
+                  suffix="元"
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="项目总成本"
+                  value={financialOverview.totalCosts}
+                  prefix={<FileTextOutlined />}
+                  valueStyle={{ color: '#fa8c16' }}
+                  suffix="元"
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="项目净利润"
+                  value={financialOverview.totalProfit}
+                  prefix={<ShareAltOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                  suffix="元"
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="充值总额"
+                  value={financialOverview.totalRecharge || 5000}
+                  prefix={<PlusOutlined />}
+                  valueStyle={{ color: '#722ed1' }}
+                  suffix="元"
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          {/* 财务数据显示区域 */}
+          <Tabs defaultActiveKey="overview" items={tabItems} />
+        </Content>
+      </Layout>
+
+
+
+      {/* 充值Modal */}
       <Modal
-        title="创建财务报表"
-        open={isReportModalVisible}
-        onCancel={() => setIsReportModalVisible(false)}
-        onOk={() => form.submit()}
+        title="账户充值"
+        open={rechargeModalVisible}
+        onOk={() => rechargeForm.submit()}
+        onCancel={() => {
+          setRechargeModalVisible(false);
+          rechargeForm.resetFields();
+        }}
         destroyOnClose
       >
         <Form
-          form={form}
+          form={rechargeForm}
           layout="vertical"
-          onFinish={handleCreateReport}
+          onFinish={handleRecharge}
         >
           <Form.Item
-            name="revenue"
-            label="收入"
-            rules={[{ required: true, message: '请输入收入金额！' }]}
+            name="amount"
+            label="充值金额"
+            rules={[
+              { required: true, message: '请输入充值金额！' },
+              { type: 'number', min: 1, message: '充值金额必须大于0！' }
+            ]}
           >
             <InputNumber
               style={{ width: '100%' }}
               precision={2}
               addonAfter="元"
-              placeholder="请输入收入金额"
+              placeholder="请输入充值金额"
+              min={1}
             />
           </Form.Item>
           
           <Form.Item
-            name="costs"
-            label="成本"
-            rules={[{ required: true, message: '请输入成本金额！' }]}
+            name="paymentMethod"
+            label="支付方式"
+            rules={[{ required: true, message: '请选择支付方式！' }]}
           >
-            <InputNumber
-              style={{ width: '100%' }}
-              precision={2}
-              addonAfter="元"
-              placeholder="请输入成本金额"
-            />
+            <Select placeholder="请选择支付方式">
+              <Option value="支付宝">支付宝</Option>
+              <Option value="微信">微信</Option>
+              <Option value="银行卡">银行卡</Option>
+            </Select>
           </Form.Item>
         </Form>
       </Modal>
@@ -371,7 +573,7 @@ const Finance = () => {
         onClose={() => setShowLoginPrompt(false)}
         message="请登录后使用财务管理功能"
       />
-    </div>
+    </Layout>
   );
 };
 

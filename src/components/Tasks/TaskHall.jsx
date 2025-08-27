@@ -18,7 +18,12 @@ import {
   Badge,
   Modal,
   Descriptions,
-  Pagination
+  Pagination,
+  Layout,
+  Menu,
+  Divider,
+  List,
+  Timeline
 } from 'antd';
 import {
   ShopOutlined,
@@ -32,16 +37,30 @@ import {
   ExclamationCircleOutlined,
   SearchOutlined,
   FilterOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  HomeOutlined,
+  DollarOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  BellOutlined,
+  MessageOutlined,
+  FileTextOutlined,
+  StarOutlined,
+  BarChartOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
+import { useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import LoginPrompt from '../Auth/LoginPrompt';
 import useAuthStore from '../../stores/authStore';
 import { tasksAPI } from '../../services/api';
+import './TaskHall.css';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
 const { Option } = Select;
+const { Sider, Content } = Layout;
 
 const TaskHall = () => {
   const [tasks, setTasks] = useState([]);
@@ -60,8 +79,12 @@ const TaskHall = () => {
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const [claimingTaskId, setClaimingTaskId] = useState(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState('card');
   
-  const { user, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuthStore();
 
   // 获取任务大厅数据
   const fetchTaskHall = async (page = 1, pageSize = 20) => {
@@ -156,6 +179,11 @@ const TaskHall = () => {
     setShowLoginPrompt(true);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
   // 查看任务详情
   const handleViewTask = (task) => {
     setViewingTask(task);
@@ -190,6 +218,85 @@ const TaskHall = () => {
     const config = priorityConfig[priority] || priorityConfig.medium;
     return <Tag color={config.color}>{config.text}</Tag>;
   };
+
+  // 主导航菜单项
+  const mainNavItems = [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: '首页',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: '项目管理',
+    },
+    {
+      key: '/project-hall',
+      icon: <AppstoreOutlined />,
+      label: '项目大厅',
+    },
+    {
+      key: '/points',
+      icon: <StarOutlined />,
+      label: '积分统计',
+    },
+    {
+      key: '/finance',
+      icon: <DollarOutlined />,
+      label: '财务管理',
+    },
+    {
+      key: '/evaluation',
+      icon: <BarChartOutlined />,
+      label: '数据分析',
+    },
+  ];
+
+  // 功能菜单项
+  const functionItems = [
+    {
+      key: 'notifications',
+      icon: <BellOutlined />,
+      label: '消息通知',
+    },
+    {
+      key: 'messages',
+      icon: <MessageOutlined />,
+      label: '私信',
+    },
+    {
+      key: 'documents',
+      icon: <FileTextOutlined />,
+      label: '文档中心',
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    },
+  ];
+
+  const handleMenuClick = ({ key }) => {
+    if (key === 'logout') {
+      handleLogout();
+    } else if (key.startsWith('/')) {
+      navigate(key);
+    }
+  };
+
+  // 任务统计
+  const taskStats = {
+    available: tasks.length,
+    highPriority: tasks.filter(task => task.priority === 'high' || task.priority === 'urgent').length,
+    totalPages: Math.ceil(pagination.total / pagination.pageSize),
+    total: pagination.total
+  };
+
+  // 最近任务
+  const recentTasks = tasks
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 5);
 
   // 表格列定义
   const columns = [
@@ -275,102 +382,203 @@ const TaskHall = () => {
     },
   ];
 
-  const availableTasksCount = tasks.length;
-  const highPriorityCount = tasks.filter(task => task.priority === 'high' || task.priority === 'urgent').length;
-
   return (
-    <div style={{ padding: '24px' }}>
-      {/* 页面头部 */}
-      <div style={{ marginBottom: '24px' }}>
-        <Title level={2}>
-          <ShopOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-          任务大厅
-        </Title>
-        <Text type="secondary">
-          这里展示所有可领取的任务，项目成员可以根据自己的技能和时间选择合适的任务
+    <Layout className="project-hall-layout">
+      {/* 左侧总导航栏 */}
+      <Sider 
+        width={200} 
+        collapsible 
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        className="left-sider"
+      >
+        <div style={{ 
+          height: '64px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          borderBottom: '1px solid #303030'
+        }}>
+          <Text strong style={{ 
+            fontSize: collapsed ? '16px' : '18px', 
+            color: '#fff',
+            whiteSpace: 'nowrap'
+          }}>
+            {collapsed ? '功分' : '功分易'}
         </Text>
       </div>
 
-      {/* 统计面板 */}
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="可领取任务"
-              value={availableTasksCount}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#3f8600' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="高优先级任务"
-              value={highPriorityCount}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: '#cf1322' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="总页数"
-              value={Math.ceil(pagination.total / pagination.pageSize)}
-              prefix={<FlagOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="总任务数"
-              value={pagination.total}
-              prefix={<ProjectOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={mainNavItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        <Divider style={{ margin: '16px 0', borderColor: '#303030' }} />
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          items={functionItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        {/* 用户信息区域 */}
+        <div className="user-info-area">
+          {isAuthenticated() ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" src={user?.avatar} icon={<UserOutlined />} />
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#fff', fontSize: '12px' }} ellipsis>
+                    {user?.username}
+                  </Text>
+                  <div>
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LogoutOutlined />}
+                      onClick={handleLogout}
+                      style={{ color: '#fff', padding: 0, height: 'auto' }}
+                    >
+                      {!collapsed && '退出'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" icon={<UserOutlined />} />
+              {!collapsed && (
+                <div>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<LoginOutlined />}
+                    style={{ color: '#fff', padding: 0, height: 'auto' }}
+                  >
+                    登录
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Sider>
 
-      {/* 搜索和过滤器 */}
-      <Card style={{ marginBottom: '16px' }}>
-        <Row gutter={16} align="middle">
-          <Col flex={1}>
-            <Search
-              placeholder="搜索任务标题或描述..."
-              allowClear
-              onSearch={handleSearch}
-              style={{ maxWidth: '400px' }}
-              prefix={<SearchOutlined />}
-            />
-          </Col>
-          <Col>
-            <Space>
-              <Select
-                value={filters.priority}
-                onChange={(value) => handleFilterChange('priority', value)}
-                style={{ width: 120 }}
-                prefix={<FilterOutlined />}
-              >
-                <Option value="all">全部优先级</Option>
-                <Option value="low">低</Option>
-                <Option value="medium">中</Option>
-                <Option value="high">高</Option>
-                <Option value="urgent">紧急</Option>
-              </Select>
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={() => fetchTaskHall(pagination.current, pagination.pageSize)}
-              >
-                刷新
-              </Button>
-            </Space>
+
+
+      {/* 右侧内容栏 */}
+      <Layout>
+        <Content className="right-content" style={{ 
+          padding: '24px', 
+          overflow: 'auto'
+        }}>
+          {/* 顶部标题和搜索 */}
+          <div style={{ marginBottom: '24px' }}>
+            <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
+              <Title level={2} style={{ margin: 0 }}>
+                <AppstoreOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
+                项目大厅
+              </Title>
+              <Space>
+                <Select
+                  value={filters.priority}
+                  onChange={(value) => handleFilterChange('priority', value)}
+                  style={{ width: 120 }}
+                >
+                  <Option value="all">全部优先级</Option>
+                  <Option value="low">低</Option>
+                  <Option value="medium">中</Option>
+                  <Option value="high">高</Option>
+                  <Option value="urgent">紧急</Option>
+                </Select>
+                <Button.Group>
+                  <Tooltip title="卡片视图">
+                    <Button 
+                      type={viewMode === 'card' ? 'primary' : 'default'} 
+                      icon={<AppstoreOutlined />}
+                      onClick={() => setViewMode('card')}
+                    />
+                  </Tooltip>
+                  <Tooltip title="列表视图">
+                    <Button 
+                      type={viewMode === 'table' ? 'primary' : 'default'} 
+                      icon={<BarChartOutlined />}
+                      onClick={() => setViewMode('table')}
+                    />
+                  </Tooltip>
+                </Button.Group>
+                <Button 
+                  icon={<ReloadOutlined />} 
+                  onClick={() => fetchTaskHall(pagination.current, pagination.pageSize)}
+                >
+                  刷新
+                </Button>
+              </Space>
+            </Row>
+
+            {/* 搜索栏 */}
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
+              <Col span={12}>
+                <Search
+                  placeholder="搜索任务标题或描述..."
+                  allowClear
+                  onSearch={handleSearch}
+                  prefix={<SearchOutlined />}
+                />
           </Col>
         </Row>
+          </div>
+
+          {/* 统计数据 */}
+          <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="可领取任务"
+                  value={taskStats.available}
+                  prefix={<CheckCircleOutlined />}
+                  valueStyle={{ color: '#3f8600' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="高优先级任务"
+                  value={taskStats.highPriority}
+                  prefix={<ExclamationCircleOutlined />}
+                  valueStyle={{ color: '#cf1322' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="总页数"
+                  value={taskStats.totalPages}
+                  prefix={<FlagOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={6}>
+              <Card>
+                <Statistic
+                  title="总任务数"
+                  value={taskStats.total}
+                  prefix={<ProjectOutlined />}
+                  valueStyle={{ color: '#722ed1' }}
+                />
       </Card>
+            </Col>
+          </Row>
 
       {/* 任务列表 */}
       <Card>
@@ -381,14 +589,84 @@ const TaskHall = () => {
           />
         ) : (
           <>
-            <Table
-              columns={columns}
-              dataSource={tasks}
-              loading={loading}
-              pagination={false}
-              rowKey="id"
-              size="middle"
-            />
+            {viewMode === 'card' ? (
+              <Row gutter={[16, 16]}>
+                {tasks.map((task) => (
+                  <Col xs={24} sm={12} lg={8} xl={6} key={task.id}>
+                    <Card
+                      hoverable
+                      actions={[
+                        <Button 
+                          type="link" 
+                          size="small" 
+                          icon={<EyeOutlined />}
+                          onClick={() => handleViewTask(task)}
+                        >
+                          查看详情
+                        </Button>,
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          onClick={() => handleClaimTask(task.id)}
+                          loading={claimingTaskId === task.id}
+                        >
+                          领取任务
+                        </Button>
+                      ]}
+                    >
+                      <Card.Meta
+                        avatar={<Avatar icon={<ProjectOutlined />} />}
+                        title={
+                          <Space>
+                            <Text strong>{task.title}</Text>
+                            {getPriorityTag(task.priority)}
+                          </Space>
+                        }
+                        description={
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              {task.description?.substring(0, 80)}...
+                            </Text>
+                            <Space>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                <ProjectOutlined /> {task.project?.name}
+                              </Text>
+                            </Space>
+                            <Space>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                <UserOutlined /> {task.creator?.username}
+                              </Text>
+                              <Text type="secondary" style={{ fontSize: '12px' }}>
+                                <ClockCircleOutlined /> {task.estimated_hours || 0}h
+                              </Text>
+                            </Space>
+                            {task.tags && task.tags.length > 0 && (
+                              <div>
+                                {task.tags.slice(0, 3).map((tag, index) => (
+                                  <Tag key={index} size="small" color="blue">{tag}</Tag>
+                                ))}
+                                {task.tags.length > 3 && (
+                                  <Tag size="small">+{task.tags.length - 3}</Tag>
+                                )}
+                              </div>
+                            )}
+                          </Space>
+                        }
+                      />
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            ) : (
+              <Table
+                columns={columns}
+                dataSource={tasks}
+                loading={loading}
+                pagination={false}
+                rowKey="id"
+                size="middle"
+              />
+            )}
             
             {/* 分页 */}
             {pagination.total > 0 && (
@@ -409,6 +687,8 @@ const TaskHall = () => {
           </>
         )}
       </Card>
+        </Content>
+      </Layout>
 
       {/* 任务详情Modal */}
       <Modal
@@ -485,7 +765,7 @@ const TaskHall = () => {
         onClose={() => setShowLoginPrompt(false)}
         message="请登录后领取任务"
       />
-    </div>
+    </Layout>
   );
 };
 

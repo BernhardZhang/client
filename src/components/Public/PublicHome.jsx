@@ -11,7 +11,11 @@ import {
   Tag,
   Avatar,
   Timeline,
-  Empty
+  Empty,
+  Layout,
+  Menu,
+  Divider,
+  Badge
 } from 'antd';
 import {
   UserOutlined,
@@ -20,22 +24,45 @@ import {
   CalendarOutlined,
   TeamOutlined,
   TrophyOutlined,
+  HomeOutlined,
+  DollarOutlined,
+  BarChartOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  BellOutlined,
+  MessageOutlined,
+  FileTextOutlined,
+  StarOutlined,
+  FireOutlined,
+  WalletOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
+import useAuthStore from '../../stores/authStore';
+import './PublicHome.css';
 
+const { Header, Sider, Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
 
 const PublicHome = () => {
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProjects: 0,
+    activeProjects: 0,
     completedTasks: 0,
-    totalTasks: 0
+    totalTasks: 0,
+    totalPoints: 0,
+    availableFunds: 0,
+    frozenFunds: 0
   });
   const [recentProjects, setRecentProjects] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuthStore();
 
   // 获取公开统计数据
   const fetchPublicStats = async () => {
@@ -61,8 +88,12 @@ const PublicHome = () => {
       setStats({
         totalUsers: 25,
         totalProjects: 8,
+        activeProjects: 6,
         completedTasks: 156,
-        totalTasks: 203
+        totalTasks: 203,
+        totalPoints: 12580,
+        availableFunds: 45600,
+        frozenFunds: 12300
       });
       setRecentProjects([
         {
@@ -95,8 +126,174 @@ const PublicHome = () => {
     navigate(`/public/projects/${projectId}`);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  // 主导航菜单项
+  const mainNavItems = [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: '首页',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: '项目管理',
+    },
+    {
+      key: '/project-hall',
+      icon: <AppstoreOutlined />,
+      label: '项目大厅',
+    },
+    {
+      key: '/points',
+      icon: <StarOutlined />,
+      label: '积分统计',
+    },
+    {
+      key: '/finance',
+      icon: <DollarOutlined />,
+      label: '财务管理',
+    },
+    {
+      key: '/evaluation',
+      icon: <BarChartOutlined />,
+      label: '数据分析',
+    },
+  ];
+
+  // 功能菜单项
+  const functionItems = [
+    {
+      key: 'notifications',
+      icon: <BellOutlined />,
+      label: '消息通知',
+    },
+    {
+      key: 'messages',
+      icon: <MessageOutlined />,
+      label: '私信',
+    },
+    {
+      key: 'documents',
+      icon: <FileTextOutlined />,
+      label: '文档中心',
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    },
+  ];
+
+  const handleMenuClick = ({ key }) => {
+    if (key === 'logout') {
+      handleLogout();
+    } else if (key.startsWith('/')) {
+      navigate(key);
+    }
+  };
+
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5' }}>
+    <Layout className="home-layout">
+      {/* 左侧总导航栏 */}
+      <Sider 
+        width={200} 
+        collapsible 
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        className="left-sider"
+      >
+        <div style={{ 
+          height: '64px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          borderBottom: '1px solid #303030'
+        }}>
+          <Text strong style={{ 
+            fontSize: collapsed ? '16px' : '18px', 
+            color: '#fff',
+            whiteSpace: 'nowrap'
+          }}>
+            {collapsed ? '功分' : '功分易'}
+          </Text>
+        </div>
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={mainNavItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        <Divider style={{ margin: '16px 0', borderColor: '#303030' }} />
+        
+        <Menu
+          theme="dark"
+          mode="inline"
+          items={functionItems}
+          onClick={handleMenuClick}
+          className="nav-menu"
+        />
+        
+        {/* 用户信息区域 */}
+        <div className="user-info-area">
+          {isAuthenticated() ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" src={user?.avatar} icon={<UserOutlined />} />
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#fff', fontSize: '12px' }} ellipsis>
+                    {user?.username}
+                  </Text>
+                  <div>
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LogoutOutlined />}
+                      onClick={handleLogout}
+                      style={{ color: '#fff', padding: 0, height: 'auto' }}
+                    >
+                      {!collapsed && '退出'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" icon={<UserOutlined />} />
+              {!collapsed && (
+                <div>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<LoginOutlined />}
+                    style={{ color: '#fff', padding: 0, height: 'auto' }}
+                  >
+                    登录
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Sider>
+
+
+
+      {/* 右侧内容栏 */}
+      <Layout>
+        <Content className="right-content" style={{ 
+          padding: '24px', 
+          overflow: 'auto'
+        }}>
       {/* 欢迎区域 */}
       <Card style={{ marginBottom: '24px', textAlign: 'center' }}>
         <Title level={2}>欢迎来到功分易</Title>
@@ -108,43 +305,63 @@ const PublicHome = () => {
 
       {/* 统计数据 */}
       <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={12} sm={6}>
-          <Card>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <Statistic
-              title="注册用户"
-              value={stats.totalUsers}
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#3f8600' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card>
-            <Statistic
-              title="活跃项目"
-              value={stats.totalProjects}
+              title="项目统计"
+              value={`${stats.totalProjects || 0} / ${stats.activeProjects || 0}`}
               prefix={<ProjectOutlined />}
-              valueStyle={{ color: '#1890ff' }}
+              valueStyle={{ color: '#3f8600', fontSize: '24px' }}
+              suffix={
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                  <div>总项目数 / 活跃项目数</div>
+                </div>
+              }
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6}>
-          <Card>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <Statistic
-              title="已完成任务"
-              value={stats.completedTasks}
+              title="任务统计"
+              value={`${stats.completedTasks || 0} / ${stats.totalTasks || 0}`}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#722ed1' }}
+              valueStyle={{ color: '#1890ff', fontSize: '24px' }}
+              suffix={
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                  <div>已完成 / 总任务数</div>
+                </div>
+              }
             />
           </Card>
         </Col>
-        <Col xs={12} sm={6}>
-          <Card>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <Statistic
-              title="总任务数"
-              value={stats.totalTasks}
-              prefix={<CalendarOutlined />}
-              valueStyle={{ color: '#fa8c16' }}
+              title="积分统计"
+              value={stats.totalPoints || 0}
+              prefix={<StarOutlined />}
+              valueStyle={{ color: '#722ed1', fontSize: '24px' }}
+              suffix={
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                  <div>总积分数量</div>
+                </div>
+              }
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Statistic
+              title="资金统计"
+              value={`${stats.availableFunds || 0} / ${stats.frozenFunds || 0}`}
+              prefix={<WalletOutlined />}
+              valueStyle={{ color: '#fa8c16', fontSize: '24px' }}
+              suffix={
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+                  <div>可用资金 / 冻结资金</div>
+                </div>
+              }
             />
           </Card>
         </Col>
@@ -152,8 +369,8 @@ const PublicHome = () => {
 
       <Row gutter={[16, 16]}>
         {/* 最近项目 */}
-        <Col xs={24} lg={12}>
-          <Card title="最近项目" extra={<ProjectOutlined />}>
+        <Col xs={24} xl={12}>
+          <Card title="最近项目" extra={<ProjectOutlined />} style={{ height: '400px' }}>
             {recentProjects.length > 0 ? (
               <List
                 dataSource={recentProjects}
@@ -197,8 +414,8 @@ const PublicHome = () => {
         </Col>
 
         {/* 平台特色 */}
-        <Col xs={24} lg={12}>
-          <Card title="平台特色" extra={<TrophyOutlined />}>
+        <Col xs={24} xl={12}>
+          <Card title="平台特色" extra={<TrophyOutlined />} style={{ height: '400px' }}>
             <Timeline>
               <Timeline.Item color="blue">
                 <Text strong>项目管理</Text>
@@ -224,7 +441,9 @@ const PublicHome = () => {
           </Card>
         </Col>
       </Row>
-    </div>
+        </Content>
+      </Layout>
+    </Layout>
   );
 };
 

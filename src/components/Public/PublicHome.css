@@ -1,0 +1,164 @@
+/* 首页左中右布局样式 */
+.home-layout {
+  min-height: 100vh;
+  /* 重置全局样式，确保不受ResponsiveLayout影响 */
+  position: relative;
+  z-index: 1;
+}
+
+/* 确保首页不受ResponsiveLayout的顶部和底部导航影响 */
+.home-layout .top-header,
+.home-layout .bottom-navigation {
+  display: none !important;
+}
+
+.home-layout .main-content {
+  padding-bottom: 0 !important;
+}
+
+.home-layout .content-wrapper {
+  padding: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* 左侧导航栏样式 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+
+
+/* 右侧内容区域样式 */
+.right-content {
+  margin-left: 200px;
+  min-height: 100vh;
+  background: #f0f2f5;
+  transition: margin-left 0.2s;
+}
+
+.left-sider.ant-layout-sider-collapsed ~ .right-content {
+  margin-left: 80px;
+}
+
+/* 导航菜单样式 */
+.nav-menu {
+  border-right: 0;
+  flex: 1;
+}
+
+.nav-menu .ant-menu-item {
+  margin: 4px 8px;
+  border-radius: 6px;
+}
+
+.nav-menu .ant-menu-item-selected {
+  background-color: #1890ff !important;
+}
+
+/* 左侧导航栏样式调整 */
+.left-sider {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.left-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* 为底部用户信息区域预留空间 */
+  padding-bottom: 80px;
+}
+
+/* 用户信息区域样式 */
+.user-info-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  border-top: 1px solid #303030;
+  background: #001529;
+  /* 确保不被折叠按钮遮挡 */
+  z-index: 1001;
+  /* 为折叠按钮留出空间 */
+  padding-bottom: 20px;
+}
+
+
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .right-content {
+    margin-left: 200px;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed ~ .right-content {
+    margin-left: 80px;
+  }
+}
+
+@media (max-width: 768px) {
+  .left-sider {
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  
+  .left-sider.ant-layout-sider-collapsed {
+    transform: translateX(0);
+  }
+  
+  .right-content {
+    margin-left: 0;
+  }
+  
+  /* 移动端显示按钮 */
+  .mobile-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1001;
+    display: block;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-toggle {
+    display: none;
+  }
+}
+
+/* 滚动条样式 */
+.middle-sider::-webkit-scrollbar {
+  width: 4px;
+}
+
+.middle-sider::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.middle-sider::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.middle-sider::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
