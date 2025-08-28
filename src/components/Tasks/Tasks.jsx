@@ -200,12 +200,17 @@ const Tasks = () => {
   };
 
   const handleDeleteTask = async (taskId) => {
-    const result = await deleteTask(taskId);
-    if (result && result.success !== false) {
-      message.success('任务删除成功！');
-      fetchTaskStats();
-    } else {
-      message.error(result?.error || '删除失败');
+    try {
+      const result = await deleteTask(taskId);
+      if (result && result.success !== false) {
+        message.success('任务删除成功！');
+        fetchTaskStats();
+      } else {
+        message.error(result?.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('删除任务错误:', error);
+      message.error('删除任务时发生错误');
     }
   };
 

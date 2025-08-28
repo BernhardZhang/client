@@ -83,11 +83,13 @@ const IntegratedProjectManagement = () => {
   const [searchText, setSearchText] = useState('');
   const [sortBy, setSortBy] = useState('create_time');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [createForm] = Form.useForm();
   
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAuthenticated } = useAuthStore();
-  const { projects, fetchProjects } = useProjectStore();
+  const { projects, fetchProjects, createProject, isLoading } = useProjectStore();
   
   useEffect(() => {
     // 无论是否登录都获取公开项目数据
@@ -119,6 +121,43 @@ const IntegratedProjectManagement = () => {
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const handleCreateProject = () => {
+    if (!isAuthenticated()) {
+      handleLoginRequired();
+      return;
+    }
+    setIsCreateModalVisible(true);
+    createForm.resetFields();
+  };
+
+  const handleCreateModalOk = async () => {
+    try {
+      const values = await createForm.validateFields();
+      const result = await createProject(values);
+      if (result.success) {
+        message.success('项目创建成功！');
+        setIsCreateModalVisible(false);
+        createForm.resetFields();
+      } else {
+        if (typeof result.error === 'object') {
+          Object.values(result.error).flat().forEach(error => {
+            message.error(error);
+          });
+        } else {
+          message.error(result.error);
+        }
+      }
+    } catch (error) {
+      console.error('Create project error:', error);
+      message.error('创建项目失败');
+    }
+  };
+
+  const handleCreateModalCancel = () => {
+    setIsCreateModalVisible(false);
+    createForm.resetFields();
   };
 
   // 获取项目数据（包括公开项目）
@@ -473,6 +512,7 @@ const IntegratedProjectManagement = () => {
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
+                  onClick={handleCreateProject}
                 >
                   创建项目
                 </Button>
@@ -521,6 +561,54 @@ const IntegratedProjectManagement = () => {
         onLogin={handlePromptLogin}
         onRegister={handlePromptRegister}
       />
+
+      {/* 创建项目Modal */}
+      <Modal
+        title="创建项目"
+        open={isCreateModalVisible}
+        onOk={handleCreateModalOk}
+        onCancel={handleCreateModalCancel}
+        confirmLoading={isLoading}
+        width={600}
+      >
+        <Form
+          form={createForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="name"
+            label="项目名称"
+            rules={[
+              { required: true, message: '请输入项目名称！' },
+              { max: 200, message: '项目名称不能超过200个字符！' },
+            ]}
+          >
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
+          
+          <Form.Item
+            name="description"
+            label="项目描述"
+            rules={[
+              { max: 1000, message: '项目描述不能超过1000个字符！' },
+            ]}
+          >
+            <Input.TextArea rows={4} placeholder="请输入项目描述" />
+          </Form.Item>
+          
+          <Form.Item
+            name="project_type"
+            label="项目类型"
+            rules={[{ required: true, message: '请选择项目类型！' }]}
+          >
+            <Select placeholder="选择项目类型">
+              <Select.Option value="research">科研项目</Select.Option>
+              <Select.Option value="development">开发项目</Select.Option>
+              <Select.Option value="other">其他</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 登录和注册对话框 */}
       <LoginDialog

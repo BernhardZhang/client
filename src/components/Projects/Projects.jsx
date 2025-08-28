@@ -97,6 +97,11 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
     isLoading 
   } = useProjectStore();
 
+  // 同步传入的viewMode到内部状态
+  useEffect(() => {
+    setInternalViewMode(viewMode);
+  }, [viewMode]);
+
   // 防抖的获取项目数据函数
   const debouncedFetchProjects = useCallback(() => {
     const now = Date.now();

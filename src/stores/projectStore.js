@@ -67,7 +67,7 @@ const useProjectStore = create((set, get) => ({
       const response = await projectsAPI.deleteProject(id);
       console.log('Delete project response:', response);
       
-      // 手动从列表中移除项目，避免重新请求
+      // 项目删除成功，从列表中移除
       const { projects } = get();
       const updatedProjects = Array.isArray(projects) 
         ? projects.filter(p => p.id !== id)
@@ -81,10 +81,23 @@ const useProjectStore = create((set, get) => ({
     } catch (error) {
       console.error('删除项目错误:', error);
       
-      // 特殊处理：如果是204响应或网络错误但实际删除成功
-      if (error.response?.status === 204 || 
-          (error.code === 'ERR_NETWORK' && error.message.includes('204'))) {
-        console.log('Project deleted successfully (204 response)');
+      // 处理成功的响应状态码 (200-299 范围)
+      if (error.response?.status >= 200 && error.response?.status < 300) {
+        console.log('Project deleted successfully (HTTP success status)');
+        const { projects } = get();
+        const updatedProjects = Array.isArray(projects) 
+          ? projects.filter(p => p.id !== id)
+          : [];
+        set({ projects: updatedProjects, isLoading: false });
+        return { 
+          success: true, 
+          message: error.response.data?.message || '项目删除成功' 
+        };
+      }
+      
+      // 处理204无内容响应 (删除成功但无响应体)
+      if (error.response?.status === 204) {
+        console.log('Project deleted successfully (204 No Content)');
         const { projects } = get();
         const updatedProjects = Array.isArray(projects) 
           ? projects.filter(p => p.id !== id)
@@ -93,20 +106,9 @@ const useProjectStore = create((set, get) => ({
         return { success: true, message: '项目删除成功' };
       }
       
-      // 对于软删除的情况，即使返回200也认为删除成功
-      if (error.response?.status === 200 && error.response?.data?.message) {
-        console.log('Project deleted successfully (soft delete)');
-        const { projects } = get();
-        const updatedProjects = Array.isArray(projects) 
-          ? projects.filter(p => p.id !== id)
-          : [];
-        set({ projects: updatedProjects, isLoading: false });
-        return { success: true, message: error.response.data.message };
-      }
-      
       set({ isLoading: false });
       
-      // 更完整的错误处理
+      // 错误处理
       let errorMessage = '删除项目失败';
       if (error.response?.data) {
         if (error.response.data.error) {

@@ -105,37 +105,37 @@ const useTaskStore = create((set, get) => ({
       const response = await tasksAPI.deleteTask(taskId);
       console.log('Delete task response:', response);
       
+      // 任务删除成功，从列表中移除
       set(state => ({
         tasks: state.tasks.filter(task => task.id !== taskId),
         currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
         isLoading: false
       }));
       
-      return { success: true };
+      return { success: true, message: '任务删除成功' };
     } catch (error) {
       console.error('Error deleting task:', error);
       
-      // 特殊处理：如果是204响应或网络错误但实际删除成功
-      if (error.response?.status === 204 || 
-          (error.code === 'ERR_NETWORK' && error.message.includes('204'))) {
-        console.log('Task deleted successfully (204 response)');
+      // 处理204响应 (删除成功无内容返回)
+      if (error.response?.status === 204) {
+        console.log('Task deleted successfully (204 No Content)');
         set(state => ({
           tasks: state.tasks.filter(task => task.id !== taskId),
           currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
           isLoading: false
         }));
-        return { success: true };
+        return { success: true, message: '任务删除成功' };
       }
       
-      // 处理其他可能的成功响应
-      if (error.response?.status === 200 || error.response?.status === 202) {
-        console.log('Task deleted successfully (other success response)');
+      // 处理其他成功响应状态码
+      if (error.response?.status >= 200 && error.response?.status < 300) {
+        console.log('Task deleted successfully (HTTP success status)');
         set(state => ({
           tasks: state.tasks.filter(task => task.id !== taskId),
           currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
           isLoading: false
         }));
-        return { success: true };
+        return { success: true, message: '任务删除成功' };
       }
       
       const errorMessage = error.response?.data?.message || 
