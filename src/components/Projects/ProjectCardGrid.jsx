@@ -11,6 +11,7 @@ const ProjectCardGrid = ({
   onPin,
   onView,
   onEdit,
+  onDelete,
   onJoin,
   onLeave,
   onManageTasks,
@@ -58,6 +59,7 @@ const ProjectCardGrid = ({
             onPin={onPin}
             onView={onView}
             onEdit={onEdit}
+            onDelete={onDelete}
             onJoin={onJoin}
             onLeave={onLeave}
             onManageTasks={onManageTasks}

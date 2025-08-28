@@ -63,9 +63,9 @@ const useProjectStore = create((set, get) => ({
 
   deleteProject: async (id) => {
     set({ isLoading: true });
-    
     try {
       const response = await projectsAPI.deleteProject(id);
+      console.log('Delete project response:', response);
       
       // 手动从列表中移除项目，避免重新请求
       const { projects } = get();
@@ -79,8 +79,32 @@ const useProjectStore = create((set, get) => ({
         message: response.data?.message || '项目删除成功' 
       };
     } catch (error) {
-      set({ isLoading: false });
       console.error('删除项目错误:', error);
+      
+      // 特殊处理：如果是204响应或网络错误但实际删除成功
+      if (error.response?.status === 204 || 
+          (error.code === 'ERR_NETWORK' && error.message.includes('204'))) {
+        console.log('Project deleted successfully (204 response)');
+        const { projects } = get();
+        const updatedProjects = Array.isArray(projects) 
+          ? projects.filter(p => p.id !== id)
+          : [];
+        set({ projects: updatedProjects, isLoading: false });
+        return { success: true, message: '项目删除成功' };
+      }
+      
+      // 对于软删除的情况，即使返回200也认为删除成功
+      if (error.response?.status === 200 && error.response?.data?.message) {
+        console.log('Project deleted successfully (soft delete)');
+        const { projects } = get();
+        const updatedProjects = Array.isArray(projects) 
+          ? projects.filter(p => p.id !== id)
+          : [];
+        set({ projects: updatedProjects, isLoading: false });
+        return { success: true, message: error.response.data.message };
+      }
+      
+      set({ isLoading: false });
       
       // 更完整的错误处理
       let errorMessage = '删除项目失败';

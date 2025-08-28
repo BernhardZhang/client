@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography } from 'antd';
+import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography, Modal } from 'antd';
 import {
   TeamOutlined,
   StarFilled,
@@ -14,6 +14,7 @@ import {
   InfoCircleOutlined,
   UsergroupAddOutlined,
   LikeOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
@@ -26,6 +27,7 @@ const ProjectCard = ({
   onPin,
   onView,
   onEdit,
+  onDelete,
   onJoin,
   onLeave,
   onManageTasks,
@@ -263,6 +265,26 @@ const ProjectCard = ({
               icon={<SettingOutlined />}
               onClick={() => onEdit(project)}
               style={{ color: '#666' }}
+            />
+          )}
+          {isOwner && (
+            <Button
+              type="text"
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => {
+                Modal.confirm({
+                  title: '确定要删除这个项目吗？',
+                  content: `项目"${project.name}"将被永久删除，此操作不可撤销。`,
+                  okText: '确定删除',
+                  okType: 'danger',
+                  cancelText: '取消',
+                  onOk: async () => {
+                    await onDelete(project.id);
+                  },
+                });
+              }}
+              style={{ color: '#ff4d4f' }}
             />
           )}
         </Space>

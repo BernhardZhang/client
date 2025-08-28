@@ -685,6 +685,7 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
             onPin={togglePinProject}
             onView={handleViewProject}
             onEdit={handleEditProject}
+            onDelete={handleDeleteProject}
             onJoin={handleJoinProject}
             onLeave={handleLeaveProject}
             onManageTasks={handleManageTasks}

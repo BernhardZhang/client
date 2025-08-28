@@ -54,10 +54,27 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor to handle auth errors and special status codes
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // 特殊处理204响应，确保它被视为成功
+    if (response.status === 204) {
+      return { ...response, data: { success: true, message: '操作成功' } };
+    }
+    return response;
+  },
   (error) => {
+    // 特殊处理204响应被错误地归类为错误的情况
+    if (error.response?.status === 204) {
+      return Promise.resolve({ 
+        status: 204, 
+        data: { success: true, message: '操作成功' },
+        config: error.config,
+        headers: error.response.headers,
+        request: error.request
+      });
+    }
+    
     if (error.response?.status === 401) {
       // 只有在用户已登录的情况下才清除token并跳转到登录页
       const token = localStorage.getItem('token');
