@@ -23,12 +23,20 @@ const Login = () => {
   const { login, isLoading } = useAuthStore();
 
   const onFinish = async (values) => {
-    const result = await login(values.email, values.password);
-    if (result.success) {
-      message.success('登录成功！');
-      navigate('/');
-    } else {
-      message.error(result.error);
+    console.log('Form submitted with values:', values);
+    try {
+      const result = await login(values.email, values.password);
+      console.log('Login result:', result);
+      
+      if (result.success) {
+        message.success('登录成功！');
+        navigate('/');
+      } else {
+        message.error(result.error);
+      }
+    } catch (error) {
+      console.error('Unexpected error in onFinish:', error);
+      message.error('登录过程中发生错误');
     }
   };
 

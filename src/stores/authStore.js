@@ -7,21 +7,38 @@ const useAuthStore = create((set, get) => ({
   isLoading: false,
   
   login: async (email, password) => {
+    console.log('Login attempt started with:', { email, password: '***' });
     set({ isLoading: true });
     try {
+      console.log('Calling authAPI.login...');
       const response = await authAPI.login(email, password);
+      console.log('Login response received:', response);
+      
       const { user, token } = response.data;
       
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('token', token);
       
       set({ user, token, isLoading: false });
+      console.log('Login successful, user stored:', user);
       return { success: true };
     } catch (error) {
+      console.error('Login error:', error);
+      console.error('Error response:', error.response);
       set({ isLoading: false });
+      
+      let errorMessage = '登录失败';
+      if (error.response?.data?.non_field_errors) {
+        errorMessage = error.response.data.non_field_errors[0];
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       return { 
         success: false, 
-        error: error.response?.data?.message || '登录失败' 
+        error: errorMessage
       };
     }
   },

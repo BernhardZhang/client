@@ -232,9 +232,9 @@ const TaskHall = () => {
       label: '项目管理',
     },
     {
-      key: '/project-hall',
+      key: '/task-hall',
       icon: <AppstoreOutlined />,
-      label: '项目大厅',
+      label: '任务大厅',
     },
     {
       key: '/points',
@@ -484,7 +484,7 @@ const TaskHall = () => {
             <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
               <Title level={2} style={{ margin: 0 }}>
                 <AppstoreOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                项目大厅
+                任务大厅
               </Title>
               <Space>
                 <Select

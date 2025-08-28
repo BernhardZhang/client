@@ -16,11 +16,14 @@ const LoginDialog = ({
   const { login } = useAuthStore();
 
   const handleSubmit = async (values) => {
+    console.log('LoginDialog: Form values:', values);
     setLoading(true);
     setError('');
     
     try {
-      const result = await login(values.username, values.password);
+      // 注意这里使用email而不是username
+      const result = await login(values.email, values.password);
+      console.log('LoginDialog: Login result:', result);
       if (result.success) {
         form.resetFields();
         onClose();
@@ -28,6 +31,7 @@ const LoginDialog = ({
         setError(result.error || '登录失败');
       }
     } catch (err) {
+      console.error('LoginDialog: Login error:', err);
       setError('登录时发生错误');
     } finally {
       setLoading(false);
@@ -80,16 +84,16 @@ const LoginDialog = ({
         )}
 
         <Form.Item
-          name="username"
+          name="email"
           rules={[
-            { required: true, message: '请输入用户名' },
-            { min: 3, message: '用户名至少3个字符' }
+            { required: true, message: '请输入邮箱地址' },
+            { type: 'email', message: '请输入有效的邮箱地址' }
           ]}
         >
           <Input
             prefix={<UserOutlined />}
-            placeholder="用户名"
-            autoComplete="username"
+            placeholder="邮箱地址"
+            autoComplete="email"
           />
         </Form.Item>
 

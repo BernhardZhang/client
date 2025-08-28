@@ -2,22 +2,34 @@ import axios from 'axios';
 
 // Function to load config
 const loadConfig = async () => {
-    const response = await fetch('/config.json');
-    const config = await response.json();
-    return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
+    try {
+        const response = await fetch('/config.json');
+        const config = await response.json();
+        return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
+    } catch (error) {
+        console.error('Failed to load config, using default:', error);
+        return 'http://127.0.0.1:8000/api';
+    }
 };
 
-// Initialize API base URL
-const initializeAPI = async () => {
-  api.defaults.baseURL = await loadConfig();
-};
-
+// Create axios instance with default URL (will be updated after config loads)
 const api = axios.create({
-  baseURL: await loadConfig(),
+  baseURL: 'http://127.0.0.1:8000/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Initialize API base URL
+const initializeAPI = async () => {
+  try {
+    const baseURL = await loadConfig();
+    api.defaults.baseURL = baseURL;
+    console.log('API initialized with base URL:', baseURL);
+  } catch (error) {
+    console.error('Failed to initialize API:', error);
+  }
+};
 
 // Initialize configuration on import
 initializeAPI();
@@ -61,8 +73,11 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: (email, password) =>
-    api.post('/auth/login/', { email, password }),
+  login: (email, password) => {
+    console.log('authAPI.login called with:', { email, password: '***' });
+    console.log('Current API base URL:', api.defaults.baseURL);
+    return api.post('/auth/login/', { email, password });
+  },
   register: (userData) =>
     api.post('/auth/register/', userData),
   logout: () =>

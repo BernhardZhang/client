@@ -190,9 +190,9 @@ const DataAnalysis = () => {
             label: '项目管理',
         },
         {
-            key: '/project-hall',
+            key: '/task-hall',
             icon: <CheckCircleOutlined />,
-            label: '项目大厅',
+            label: '任务大厅',
         },
         {
             key: '/points',

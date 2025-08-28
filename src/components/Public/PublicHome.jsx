@@ -41,6 +41,8 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import useAuthStore from '../../stores/authStore';
+import LoginDialog from '../Auth/LoginDialog';
+import RegisterDialog from '../Auth/RegisterDialog';
 import './PublicHome.css';
 
 const { Header, Sider, Content } = Layout;
@@ -60,6 +62,8 @@ const PublicHome = () => {
   const [recentProjects, setRecentProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [loginVisible, setLoginVisible] = useState(false);
+  const [registerVisible, setRegisterVisible] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAuthenticated } = useAuthStore();
@@ -144,9 +148,9 @@ const PublicHome = () => {
       label: '项目管理',
     },
     {
-      key: '/project-hall',
+      key: '/task-hall',
       icon: <AppstoreOutlined />,
-      label: '项目大厅',
+      label: '任务大厅',
     },
     {
       key: '/points',
@@ -198,6 +202,7 @@ const PublicHome = () => {
   };
 
   return (
+    <>
     <Layout className="home-layout">
       {/* 左侧总导航栏 */}
       <Sider 
@@ -275,6 +280,7 @@ const PublicHome = () => {
                     type="text" 
                     size="small" 
                     icon={<LoginOutlined />}
+                    onClick={() => setLoginVisible(true)}
                     style={{ color: '#fff', padding: 0, height: 'auto' }}
                   >
                     登录
@@ -444,6 +450,27 @@ const PublicHome = () => {
         </Content>
       </Layout>
     </Layout>
+
+    {/* 登录对话框 */}
+    <LoginDialog
+      visible={loginVisible}
+      onClose={() => setLoginVisible(false)}
+      onSwitchToRegister={() => {
+        setLoginVisible(false);
+        setRegisterVisible(true);
+      }}
+    />
+
+    {/* 注册对话框 */}
+    <RegisterDialog
+      visible={registerVisible}
+      onClose={() => setRegisterVisible(false)}
+      onSwitchToLogin={() => {
+        setRegisterVisible(false);
+        setLoginVisible(true);
+      }}
+    />
+  </>
   );
 };
 

@@ -71,8 +71,9 @@ const Rating = () => {
     setIsLoading(true);
     try {
       const response = await wislabApi.getEvaluations();
-      setSessions(response.data);
+      setSessions(response.data.results || response.data);
     } catch (error) {
+      console.error('Loading rating sessions error:', error);
       message.error('加载评分活动失败');
     } finally {
       setIsLoading(false);

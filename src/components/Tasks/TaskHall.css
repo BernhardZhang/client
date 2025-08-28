@@ -1,4 +1,4 @@
-/* 项目大厅页面左中右布局样式 */
+/* 任务大厅页面左中右布局样式 */
 .project-hall-layout {
   min-height: 100vh;
   /* 重置全局样式，确保不受ResponsiveLayout影响 */
@@ -6,7 +6,7 @@
   z-index: 1;
 }
 
-/* 确保项目大厅页面不受ResponsiveLayout的顶部和底部导航影响 */
+/* 确保任务大厅页面不受ResponsiveLayout的顶部和底部导航影响 */
 .project-hall-layout .top-header,
 .project-hall-layout .bottom-navigation {
   display: none !important;
