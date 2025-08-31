@@ -820,7 +820,7 @@ const TasksPage = ({ selectedProjectId = null }) => {
                 name="is_available_for_claim"
                 label="开放领取"
                 valuePropName="checked"
-                tooltip="开启后，其他项目成员可以在任务大厅看到并领取此任务"
+                tooltip="开启后，其他项目成员可以在项目大厅看到并领取此任务"
               >
                 <Switch />
               </Form.Item>

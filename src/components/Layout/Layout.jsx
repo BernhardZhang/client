@@ -55,7 +55,7 @@ const Layout = () => {
     {
       key: '/task-hall',
       icon: <ShopOutlined />,
-      label: '任务大厅',
+      label: '项目大厅',
     },
     {
       key: '/voting',

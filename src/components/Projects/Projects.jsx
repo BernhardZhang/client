@@ -27,6 +27,7 @@ import {
   Menu,
   Switch,
   Upload,
+  Slider,
 } from 'antd';
 import {
   PlusOutlined,
@@ -279,6 +280,8 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
       description: project.description,
       project_type: project.project_type,
       status: project.status,
+      progress: project.progress || 0,
+      is_public: project.is_public || false,
       create_time: project.create_time ? dayjs(project.create_time) : dayjs(),
       tags: project.tags || []
     };
@@ -289,6 +292,7 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      console.log('DEBUG: Form values before submit:', values);
       
       if (editingProject) {
         const result = await updateProject(editingProject.id, values);
@@ -752,6 +756,7 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
                   <Option value="academic">学术项目</Option>
                   <Option value="design">设计项目</Option>
                   <Option value="innovation">创新实验</Option>
+                  <Option value="development">开发项目</Option>
                   <Option value="other">其他</Option>
                 </Select>
               </Form.Item>
@@ -772,6 +777,30 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
                 </Select>
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item
+                name="progress"
+                label="项目进度"
+                initialValue={0}
+              >
+                <Slider
+                  min={0}
+                  max={100}
+                  marks={{
+                    0: '0%',
+                    25: '25%',
+                    50: '50%',
+                    75: '75%',
+                    100: '100%'
+                  }}
+                  tooltip={{
+                    formatter: (value) => `${value}%`
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="create_time"
@@ -807,6 +836,8 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
             <TextArea
               rows={4}
               placeholder="请详细描述您的项目..."
+              showCount
+              maxLength={1000}
             />
           </Form.Item>
 
@@ -820,27 +851,6 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
               style={{ width: '100%' }}
             />
           </Form.Item>
-
-          <Form.Item
-            name="files"
-            label="项目文件"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList || [];
-            }}
-          >
-            <Upload
-              multiple
-              beforeUpload={() => false}
-              listType="text"
-            >
-              <Button icon={<UploadOutlined />}>选择文件</Button>
-            </Upload>
-          </Form.Item>
-
         </Form>
       </Modal>
 

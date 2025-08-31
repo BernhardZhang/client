@@ -207,7 +207,7 @@ const IntegratedProjectManagement = () => {
     {
       key: '/task-hall',
       icon: <AppstoreOutlined />,
-      label: '任务大厅',
+      label: '项目大厅',
     },
     {
       key: '/points',
@@ -602,7 +602,10 @@ const IntegratedProjectManagement = () => {
             rules={[{ required: true, message: '请选择项目类型！' }]}
           >
             <Select placeholder="选择项目类型">
-              <Select.Option value="research">科研项目</Select.Option>
+              <Select.Option value="research">研发项目</Select.Option>
+              <Select.Option value="academic">学术项目</Select.Option>
+              <Select.Option value="design">设计项目</Select.Option>
+              <Select.Option value="innovation">创新实验</Select.Option>
               <Select.Option value="development">开发项目</Select.Option>
               <Select.Option value="other">其他</Select.Option>
             </Select>

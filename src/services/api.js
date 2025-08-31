@@ -278,7 +278,7 @@ export const tasksAPI = {
   getUserScoreSummary: () =>
     api.get('/tasks/score-summary/'),
   
-  // 任务大厅相关
+  // 项目大厅相关
   getTaskHall: (params) =>
     api.get('/tasks/hall/', { params }),
   claimTask: (taskId) =>

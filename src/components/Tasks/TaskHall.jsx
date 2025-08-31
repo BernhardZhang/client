@@ -86,7 +86,7 @@ const TaskHall = () => {
   const location = useLocation();
   const { user, logout, isAuthenticated } = useAuthStore();
 
-  // 获取任务大厅数据
+  // 获取项目大厅数据
   const fetchTaskHall = async (page = 1, pageSize = 20) => {
     setLoading(true);
     try {
@@ -108,8 +108,8 @@ const TaskHall = () => {
         });
       }
     } catch (error) {
-      console.error('获取任务大厅数据失败:', error);
-      message.error('获取任务大厅数据失败');
+      console.error('获取项目大厅数据失败:', error);
+      message.error('获取项目大厅数据失败');
       
       // 使用模拟数据作为备用
       const mockTasks = [
@@ -234,7 +234,7 @@ const TaskHall = () => {
     {
       key: '/task-hall',
       icon: <AppstoreOutlined />,
-      label: '任务大厅',
+      label: '项目大厅',
     },
     {
       key: '/points',
@@ -484,7 +484,7 @@ const TaskHall = () => {
             <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
               <Title level={2} style={{ margin: 0 }}>
                 <AppstoreOutlined style={{ marginRight: '8px', color: '#1890ff' }} />
-                任务大厅
+                项目大厅
               </Title>
               <Space>
                 <Select

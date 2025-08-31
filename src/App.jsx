@@ -42,7 +42,7 @@ function App() {
             {/* 项目管理页面使用新的左中右布局 */}
             <Route path="/projects" element={<IntegratedProjectManagement />} />
             
-            {/* 任务大厅页面使用新的左中右布局 */}
+            {/* 项目大厅页面使用新的左中右布局 */}
             <Route path="/task-hall" element={<TaskHall />} />
             
             {/* 项目大厅页面使用新的左中右布局 */}

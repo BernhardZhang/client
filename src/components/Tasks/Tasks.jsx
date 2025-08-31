@@ -346,7 +346,7 @@ const Tasks = () => {
       ),
     },
     {
-      title: '任务大厅',
+      title: '项目大厅',
       dataIndex: 'is_available_for_claim',
       key: 'is_available_for_claim',
       width: 100,
@@ -690,7 +690,7 @@ const Tasks = () => {
 
           <Form.Item
             name="is_available_for_claim"
-            label="发布到任务大厅"
+            label="发布到项目大厅"
             valuePropName="checked"
             initialValue={false}
           >

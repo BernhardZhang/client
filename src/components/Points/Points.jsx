@@ -143,7 +143,7 @@ const Points = () => {
     {
       key: '/task-hall',
       icon: <CheckCircleOutlined />,
-      label: '任务大厅',
+      label: '项目大厅',
     },
     {
       key: '/points',
