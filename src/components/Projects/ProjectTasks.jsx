@@ -69,20 +69,22 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     overdue: 0
   });
   const [tasks, setTasks] = useState([]);
-  const [availableTasks, setAvailableTasks] = useState([]); // 可领取的任务
+  const [myTasks, setMyTasks] = useState([]); // 我的任务
   const [loading, setLoading] = useState(false);
   const [claimingTaskId, setClaimingTaskId] = useState(null);
+  const [selectedAssignee, setSelectedAssignee] = useState(null); // 选中的负责人
+  const [weightCoefficient, setWeightCoefficient] = useState(1.0); // 权重系数
   
   const { user } = useAuthStore();
 
   useEffect(() => {
     if (projectId) {
       fetchProjectTasks();
-      if (mainActiveTab === 'available_tasks') {
-        fetchAvailableTasks();
+      if (mainActiveTab === 'my_tasks') {
+        fetchMyTasks();
       }
     }
-  }, [projectId, mainActiveTab]);
+  }, [projectId, mainActiveTab, user]);
 
   const fetchProjectTasks = async () => {
     try {
@@ -109,47 +111,22 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     }
   };
 
-  // 获取当前项目可领取的任务
-  const fetchAvailableTasks = async () => {
+  // 获取我的任务
+  const fetchMyTasks = async () => {
+    if (!projectId || !user) return;
+    
     try {
       setLoading(true);
       const response = await tasksAPI.getTasks({ 
         project: projectId, 
-        is_available_for_claim: true,
-        assignee__isnull: true 
+        assignee: user.id
       });
       const taskList = response.data.results || response.data || [];
-      setAvailableTasks(taskList);
+      setMyTasks(taskList);
     } catch (error) {
-      console.error('获取可领取任务失败:', error);
-      // 使用模拟数据作为备用
-      const mockTasks = [
-        {
-          id: `mock_${Date.now()}_1`,
-          title: '前端UI组件优化',
-          description: '优化现有UI组件的性能和用户体验，包括响应式设计改进',
-          project: { id: projectId, name: project?.name || '当前项目' },
-          creator: { username: '项目负责人' },
-          priority: 'high',
-          estimated_hours: 12,
-          created_at: new Date().toISOString(),
-          tags: ['前端', 'UI/UX', '优化'],
-          is_available_for_claim: true
-        },
-        {
-          id: `mock_${Date.now()}_2`,
-          title: '数据库性能优化',
-          description: '分析并优化数据库查询性能，减少响应时间',
-          project: { id: projectId, name: project?.name || '当前项目' },
-          creator: { username: '技术主管' },
-          priority: 'medium',
-          estimated_hours: 8,
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          tags: ['后端', '数据库', '性能'],
-          is_available_for_claim: true
-        }
-      ];
-      setAvailableTasks(mockTasks);
+      console.error('获取我的任务失败:', error);
+      message.error('获取我的任务失败，请稍后重试');
+      setMyTasks([]);
     } finally {
       setLoading(false);
     }
@@ -167,8 +144,18 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
       await tasksAPI.claimTask(taskId);
       message.success('任务领取成功！');
       
+      // 记录任务日志
+      try {
+        await tasksAPI.createTaskUserLog(taskId, {
+          action: 'claimed',
+          comment: '任务被接受'
+        });
+      } catch (logError) {
+        console.error('记录任务日志失败:', logError);
+      }
+      
       // 刷新任务列表
-      fetchAvailableTasks();
+      fetchMyTasks();
       fetchProjectTasks();
     } catch (error) {
       console.error('领取任务失败:', error);
@@ -186,13 +173,15 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
       return;
     }
     
-    if (!isProjectMember()) {
+    if (!canCreateTask()) {
       message.error('只有项目成员才能创建任务');
       return;
     }
     
     setEditingTask(null);
     setIsModalVisible(true);
+    setSelectedAssignee(null);
+    setWeightCoefficient(1.0);
     form.resetFields();
     // 预设项目ID
     form.setFieldsValue({ project: projectId });
@@ -201,8 +190,11 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
   const handleEditTask = (task) => {
     setEditingTask(task);
     setIsModalVisible(true);
+    setSelectedAssignee(task.assignee);
+    setWeightCoefficient(task.weight_coefficient || 1.0);
     form.setFieldsValue({
       ...task,
+      weight_coefficient: task.weight_coefficient || 1.0,
       start_date: task.start_date ? dayjs(task.start_date) : null,
       due_date: task.due_date ? dayjs(task.due_date) : null,
     });
@@ -217,26 +209,13 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
 
   const loadTaskLogs = async (taskId) => {
     try {
-      // 这里应该调用API获取任务日志，暂时使用模拟数据
-      const mockLogs = [
-        {
-          id: 1,
-          user_name: user?.username || '当前用户',
-          action: '创建了任务',
-          comment: null,
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          user_name: '项目成员',
-          action: '更新了任务状态',
-          comment: '开始处理这个任务',
-          created_at: new Date(Date.now() - 86400000).toISOString(), // 1天前
-        },
-      ];
-      setTaskLogs(mockLogs);
+      // 调用API获取任务日志
+      const response = await tasksAPI.getTaskUserLogs(taskId);
+      const logs = response.data.results || response.data || [];
+      setTaskLogs(logs);
     } catch (error) {
-      console.error('加载任务日志失败:', error);
+      console.error('获取任务日志失败:', error);
+      message.error('获取任务日志失败');
       setTaskLogs([]);
     }
   };
@@ -270,6 +249,9 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             if (values.assignee) {
               formData.append('assignee', values.assignee);
             }
+            if (values.weight_coefficient) {
+              formData.append('weight_coefficient', values.weight_coefficient);
+            }
             
             if (values.start_date) {
               formData.append('start_date', values.start_date.format('YYYY-MM-DD'));
@@ -293,6 +275,7 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
               title: values.title,
               description: values.description,
               assignee: values.assignee,
+              weight_coefficient: values.weight_coefficient,
               priority: values.priority,
               status: values.status,
               progress: values.progress,
@@ -321,10 +304,12 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             formData.append('category', values.category || '');
             formData.append('tags', values.tags || '');
             formData.append('estimated_hours', values.estimated_hours || '');
-            formData.append('is_available_for_claim', values.is_available_for_claim || false);
             
             if (values.assignee) {
               formData.append('assignee', values.assignee);
+            }
+            if (values.weight_coefficient) {
+              formData.append('weight_coefficient', values.weight_coefficient);
             }
             
             if (values.start_date) {
@@ -349,6 +334,7 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
               title: values.title,
               description: values.description,
               assignee: values.assignee,
+              weight_coefficient: values.weight_coefficient,
               project: projectId,
               priority: values.priority || 'medium',
               status: values.status || 'pending',
@@ -358,7 +344,6 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
               estimated_hours: values.estimated_hours,
               start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : null,
               due_date: values.due_date ? values.due_date.format('YYYY-MM-DD') : null,
-              is_available_for_claim: values.is_available_for_claim || false,
             };
             await tasksAPI.createTask(taskData);
           }
@@ -367,6 +352,22 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
         setIsModalVisible(false);
         form.resetFields();
         fetchProjectTasks();
+        
+        // 记录任务日志
+        try {
+          if (editingTask) {
+            await tasksAPI.createTaskUserLog(editingTask.id, {
+              action: 'updated',
+              comment: '任务更新成功'
+            });
+          } else {
+            // 对于新创建的任务，记录创建日志
+            // 注意：这里不依赖获取任务ID，因为API可能还没有返回新任务
+            console.log('任务创建成功，日志记录将在任务列表刷新后处理');
+          }
+        } catch (logError) {
+          console.error('记录任务日志失败:', logError);
+        }
       } catch (error) {
         console.error('任务操作失败:', error);
         message.error(error.response?.data?.message || error.message || '操作失败');
@@ -381,6 +382,8 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
   const handleModalCancel = () => {
     setIsModalVisible(false);
     setEditingTask(null);
+    setSelectedAssignee(null);
+    setWeightCoefficient(1.0);
     form.resetFields();
   };
 
@@ -403,8 +406,37 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     return project.members_detail?.some(member => member.user === user.id) || project.owner === user.id;
   };
 
+  // 检查用户是否可以创建任务（项目成员都可以创建任务）
+  const canCreateTask = () => {
+    if (!project || !user) return false;
+    
+    // 项目创建者可以创建任务
+    if (project.owner === user.id) return true;
+    
+    // 项目成员都可以创建任务
+    const userMembership = project.members_detail?.find(member => member.user === user.id);
+    if (userMembership) return true;
+    
+    return false;
+  };
+
   const getProjectMembers = () => {
-    return project?.members_detail || [];
+    if (!project) return [];
+    
+    // 包含项目创建者
+    const members = [...(project.members_detail || [])];
+    
+    // 如果项目创建者不在成员列表中，添加进去
+    const ownerExists = members.some(member => member.user === project.owner);
+    if (!ownerExists && project.owner_name) {
+      members.unshift({
+        user: project.owner,
+        user_name: project.owner_name,
+        role: 'owner'
+      });
+    }
+    
+    return members;
   };
 
   const getStatusTag = (status) => {
@@ -513,22 +545,31 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
       title: '负责人',
       dataIndex: 'assignee_name',
       key: 'assignee_name',
-      width: 120,
-      render: (text) => {
+      width: 150,
+      render: (text, record) => {
         if (!text) {
           return (
-            <Space>
-              <Avatar size="small" style={{ backgroundColor: '#f5f5f5' }}>
-                <UserOutlined style={{ color: '#d9d9d9' }} />
-              </Avatar>
-              <Tag color="orange" size="small">未分配</Tag>
+            <Space direction="vertical" size={2}>
+              <Space>
+                <Avatar size="small" style={{ backgroundColor: '#f5f5f5' }}>
+                  <UserOutlined style={{ color: '#d9d9d9' }} />
+                </Avatar>
+                <Tag color="orange" size="small">未分配</Tag>
+              </Space>
             </Space>
           );
         }
         return (
-          <Space>
-            <Avatar size="small" icon={<UserOutlined />} />
-            <Text style={{ fontSize: '13px' }}>{text}</Text>
+          <Space direction="vertical" size={2}>
+            <Space>
+              <Avatar size="small" icon={<UserOutlined />} />
+              <Text style={{ fontSize: '13px' }}>{text}</Text>
+            </Space>
+            {record.weight_coefficient && (
+              <Tag color="blue" size="small">
+                权重: {record.weight_coefficient}
+              </Tag>
+            )}
           </Space>
         );
       },
@@ -636,8 +677,8 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     },
   ];
 
-  // 可领取任务的表格列定义
-  const availableTasksColumns = [
+  // 我的任务的表格列定义
+  const myTasksColumns = [
     {
       title: '任务信息',
       key: 'task_info',
@@ -707,9 +748,9 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             size="small"
             loading={claimingTaskId === record.id}
             onClick={() => handleClaimTask(record.id)}
-            disabled={record.creator?.username === user?.username}
+            disabled={record.assignee === user?.id}
           >
-            {record.creator?.username === user?.username ? '自己发布' : '领取任务'}
+            {record.assignee === user?.id ? '已接受' : '接受任务'}
           </Button>
         </Space>
       ),
@@ -769,7 +810,7 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
               size="small"
               icon={<PlusOutlined />}
               onClick={handleCreateTask}
-              disabled={!isProjectMember()}
+              disabled={!canCreateTask()}
             >
               创建任务
             </Button>
@@ -845,28 +886,28 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
         <TabPane
           tab={
             <Space>
-              <ShopOutlined />
-              可领取任务
-              <Badge count={availableTasks.length} showZero color="#1890ff" />
+              <UserOutlined />
+              我的任务
+              <Badge count={myTasks.length} showZero color="#1890ff" />
             </Space>
           }
-          key="available_tasks"
+          key="my_tasks"
         >
-          {/* 可领取任务内容 */}
+          {/* 我的任务内容 */}
           <div style={{ marginBottom: '16px' }}>
             <Text type="secondary">
-              这里显示当前项目中可以主动领取的任务，你可以根据自己的技能和时间选择合适的任务
+              这里显示分配给您的任务，您可以查看任务详情、更新进度或接受新任务
             </Text>
           </div>
 
-          {/* 可领取任务统计 */}
+          {/* 我的任务统计 */}
           <Row gutter={16} style={{ marginBottom: '16px' }}>
             <Col span={8}>
               <Card size="small">
                 <Statistic
-                  title="可领取任务"
-                  value={availableTasks.length}
-                  prefix={<CheckCircleOutlined />}
+                  title="我的任务"
+                  value={myTasks.length}
+                  prefix={<UserOutlined />}
                   valueStyle={{ color: '#3f8600' }}
                 />
               </Card>
@@ -874,38 +915,37 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             <Col span={8}>
               <Card size="small">
                 <Statistic
-                  title="高优先级"
-                  value={availableTasks.filter(task => task.priority === 'high' || task.priority === 'urgent').length}
-                  prefix={<ExclamationCircleOutlined />}
-                  valueStyle={{ color: '#cf1322' }}
+                  title="已完成"
+                  value={myTasks.filter(task => task.status === 'completed').length}
+                  prefix={<CheckCircleOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
                 />
               </Card>
             </Col>
             <Col span={8}>
               <Card size="small">
                 <Statistic
-                  title="总工时"
-                  value={availableTasks.reduce((sum, task) => sum + (task.estimated_hours || 0), 0)}
+                  title="进行中"
+                  value={myTasks.filter(task => task.status === 'in_progress').length}
                   prefix={<ClockCircleOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                  suffix="小时"
+                  valueStyle={{ color: '#faad14' }}
                 />
               </Card>
             </Col>
           </Row>
 
-          {/* 可领取任务列表 */}
+          {/* 我的任务列表 */}
           <Card>
             <Table
-              columns={availableTasksColumns}
-              dataSource={availableTasks}
+              columns={myTasksColumns}
+              dataSource={myTasks}
               loading={loading}
               rowKey="id"
               size="small"
               pagination={{
                 pageSize: 5,
                 size: 'small',
-                showTotal: (total) => `共 ${total} 个可领取任务`,
+                showTotal: (total) => `共 ${total} 个我的任务`,
               }}
             />
           </Card>
@@ -957,16 +997,78 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
                 name="assignee"
                 label="负责人"
               >
-                <Select placeholder="请选择负责人" allowClear>
+                <Select 
+                  placeholder="请选择负责人" 
+                  allowClear
+                  onChange={(value) => {
+                    setSelectedAssignee(value);
+                    // 重置权重系数
+                    setWeightCoefficient(1.0);
+                    form.setFieldsValue({ weight_coefficient: 1.0 });
+                  }}
+                >
                   {getProjectMembers().map(member => (
                     <Option key={member.user} value={member.user}>
-                      {member.user_name}
+                      <Space>
+                        <span>{member.user_name}</span>
+                        {member.role === 'owner' && <Tag color="blue" size="small">创建者</Tag>}
+                        {member.role === 'admin' && <Tag color="green" size="small">管理员</Tag>}
+                      </Space>
                     </Option>
                   ))}
                 </Select>
               </Form.Item>
             </Col>
           </Row>
+
+          {/* 权重系数设置 - 只有选择了负责人才显示 */}
+          {selectedAssignee && (
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="weight_coefficient"
+                  label="项目权重系数"
+                  initialValue={1.0}
+                  rules={[
+                    { required: false, message: '请输入权重系数' },
+                    { type: 'number', min: 0.1, max: 1.0, message: '权重系数范围为0.1-1.0' }
+                  ]}
+                >
+                  <Slider
+                    min={0.1}
+                    max={1.0}
+                    step={0.1}
+                    marks={{
+                      0.1: '0.1',
+                      0.3: '0.3',
+                      0.5: '0.5',
+                      0.7: '0.7',
+                      1.0: '1.0'
+                    }}
+                    value={weightCoefficient}
+                    onChange={(value) => {
+                      setWeightCoefficient(value);
+                      form.setFieldsValue({ weight_coefficient: value });
+                    }}
+                    tooltip={{
+                      formatter: (value) => `${value}`
+                    }}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <div style={{ paddingTop: '30px' }}>
+                  <Text type="secondary">
+                    权重系数: <Text strong style={{ color: '#1890ff' }}>{weightCoefficient}</Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      用于计算该任务在项目中的重要性权重
+                    </Text>
+                  </Text>
+                </div>
+              </Col>
+            </Row>
+          )}
 
           <Row gutter={16}>
             <Col span={8}>
@@ -1087,14 +1189,6 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             </Upload>
           </Form.Item>
 
-          <Form.Item
-            name="is_available_for_claim"
-            label="开放领取"
-            valuePropName="checked"
-            tooltip="开启后，其他项目成员可以主动领取这个任务"
-          >
-            <Switch />
-          </Form.Item>
         </Form>
       </Modal>
 
@@ -1129,6 +1223,15 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
                     {viewingTask.assignee_name || '未分配'}
                   </Space>
                 </div>
+                {viewingTask.weight_coefficient && (
+                  <div>
+                    <Text strong>权重系数: </Text>
+                    <Tag color="blue">{viewingTask.weight_coefficient}</Tag>
+                    <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>
+                      (项目重要性权重)
+                    </Text>
+                  </div>
+                )}
                 <div>
                   <Text strong>状态: </Text>
                   {getStatusTag(viewingTask.status)}

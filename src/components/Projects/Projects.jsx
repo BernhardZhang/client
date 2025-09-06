@@ -34,6 +34,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   UserOutlined,
+  UserAddOutlined,
   TeamOutlined,
   LoginOutlined,
   LogoutOutlined,
@@ -67,14 +68,15 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { Option } = Select;
 
-const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy = 'create_time', sortOrder = 'desc' }) => {
+const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', searchText = '', sortBy = 'create_time', sortOrder = 'desc', activeTab = 'all' }) => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [viewingProject, setViewingProject] = useState(null);
-  const [activeTab, setActiveTab] = useState('all');
+  // 使用传入的activeTab，如果没有传入则使用默认值
+  const internalActiveTab = activeTab || 'all';
   // 使用传入的排序参数，如果没有传入则使用默认值
   const [internalSortBy, setInternalSortBy] = useState(sortBy);
   const [internalSortOrder, setInternalSortOrder] = useState(sortOrder);
@@ -83,20 +85,25 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
   // 使用传入的viewMode，如果没有传入则使用默认值
   const [internalViewMode, setInternalViewMode] = useState(viewMode);
   const [defaultDetailTab, setDefaultDetailTab] = useState('info'); // 默认详情页标签
+  const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
   const fetchTimeoutRef = useRef(null);
-  const lastFetchTimeRef = useRef(0);
+  const lastFetchTimeRef = useRef(null);
   
   const { user, updateProfile } = useAuthStore();
   const { 
-    projects, 
+    projects: storeProjects, 
     fetchProjects, 
-    createProject,
+    createProject, 
     updateProject,
     deleteProject,
     joinProject, 
     leaveProject, 
     isLoading 
   } = useProjectStore();
+  
+  // 使用传入的项目数据，如果没有传入则使用store中的数据
+  const projects = propProjects || storeProjects;
 
   // 同步传入的viewMode到内部状态
   useEffect(() => {
@@ -211,9 +218,9 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
     let filtered = [...projects];
     
     // 按标签页过滤
-    if (activeTab === 'created') {
+    if (internalActiveTab === 'created') {
       filtered = filtered.filter(project => isProjectOwner(project));
-    } else if (activeTab === 'joined') {
+    } else if (internalActiveTab === 'joined') {
       filtered = filtered.filter(project => isProjectMember(project) && !isProjectOwner(project));
     }
     
@@ -250,8 +257,11 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
 
   // 删除项目
   const handleDeleteProject = async (projectId) => {
+    console.log('handleDeleteProject被调用，项目ID:', projectId);
+    console.log('deleteProject函数:', deleteProject);
     try {
       const result = await deleteProject(projectId);
+      console.log('deleteProject返回结果:', result);
       if (result.success) {
         message.success(result.message || '项目删除成功！');
         calculateProjectStats();
@@ -362,8 +372,34 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
   };
 
   const isProjectOwner = (project) => {
+    console.log('isProjectOwner检查:', {
+      user: user,
+      userId: user?.id,
+      projectOwner: project.owner,
+      projectName: project.name,
+      isOwner: user && project.owner && project.owner === user.id
+    });
     if (!user || !project.owner) return false;
     return project.owner === user.id;
+  };
+
+  // 检查用户是否为管理员或项目创建者
+  const canViewProjectLogs = (project) => {
+    if (!user) return false;
+    
+    // 系统管理员可以查看所有项目日志
+    if (user.is_superuser || user.is_staff) return true;
+    
+    // 项目创建者可以查看项目日志
+    if (isProjectOwner(project)) return true;
+    
+    // 项目管理员可以查看项目日志
+    if (project.members_detail) {
+      const userMembership = project.members_detail.find(member => member.user === user.id);
+      if (userMembership && userMembership.role === 'admin') return true;
+    }
+    
+    return false;
   };
 
   const handleViewProject = (project) => {
@@ -419,31 +455,213 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
     setIsDetailModalVisible(true);
   };
 
+  // 邀请成员处理函数
+  const handleInviteMember = async () => {
+    if (!viewingProject) {
+      message.error('项目信息不存在');
+      return;
+    }
+    
+    try {
+      // 生成邀请码
+      const response = await fetch(`/api/projects/${viewingProject.id}/generate-invite-code/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setInviteCode(data.invite_code);
+        setIsInviteModalVisible(true);
+        message.success('邀请码生成成功');
+      } else {
+        // 如果API调用失败，使用模拟数据
+        console.warn('API调用失败，使用模拟邀请码');
+        const mockInviteCode = `INV${viewingProject.id}${Date.now().toString().slice(-6)}`;
+        setInviteCode(mockInviteCode);
+        setIsInviteModalVisible(true);
+        message.success('邀请码生成成功（演示模式）');
+      }
+    } catch (error) {
+      console.error('Generate invite code error:', error);
+      // 如果网络错误，使用模拟数据
+      console.warn('网络错误，使用模拟邀请码');
+      const mockInviteCode = `INV${viewingProject.id}${Date.now().toString().slice(-6)}`;
+      setInviteCode(mockInviteCode);
+      setIsInviteModalVisible(true);
+      message.success('邀请码生成成功（演示模式）');
+    }
+  };
+
+  // 关闭邀请弹窗
+  const handleInviteModalCancel = () => {
+    setIsInviteModalVisible(false);
+    setInviteCode('');
+  };
+
+  // 复制邀请码
+  const handleCopyInviteCode = () => {
+    navigator.clipboard.writeText(inviteCode).then(() => {
+      message.success('邀请码已复制到剪贴板');
+    }).catch(() => {
+      message.error('复制失败，请手动复制');
+    });
+  };
+
   const columns = [
     {
       title: '项目名称',
       dataIndex: 'name',
       key: 'name',
-      render: (text, record) => (
-        <Space direction="vertical" size="small">
-          <Space>
-            {pinnedProjects.includes(record.id) && (
-              <StarFilled style={{ color: '#faad14' }} />
-            )}
-            <Text strong>{text}</Text>
-          </Space>
-          <Text type="secondary" ellipsis>
-            {record.description}
-          </Text>
-          {record.tags && record.tags.length > 0 && (
-            <div>
-              {record.tags.map(tag => (
-                <Tag key={tag} size="small" color="blue">{tag}</Tag>
-              ))}
+      render: (text, record) => {
+        // 获取项目主题色
+        const getProjectThemeColor = () => {
+          if (isProjectOwner(record)) {
+            return '#1890ff'; // 蓝色 - 自己创建的项目
+          } else if (isProjectMember(record)) {
+            return '#52c41a'; // 绿色 - 被邀请参与的项目
+          } else {
+            return '#8c8c8c'; // 灰色 - 其他项目
+          }
+        };
+
+        return (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            gap: '16px',
+            padding: '12px 0',
+            borderRadius: '8px',
+            transition: 'all 0.2s ease',
+            cursor: 'pointer'
+          }}>
+            {/* 项目图标 */}
+            <div style={{ 
+              flexShrink: 0, 
+              marginTop: '4px',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: `linear-gradient(135deg, ${getProjectThemeColor()}15 0%, ${getProjectThemeColor()}25 100%)`,
+                border: `2px solid ${getProjectThemeColor()}30`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: `0 2px 8px ${getProjectThemeColor()}20`,
+                transition: 'all 0.3s ease'
+              }}>
+                <ProjectOutlined 
+                  style={{ 
+                    fontSize: 24, 
+                    color: getProjectThemeColor(),
+                    filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'
+                  }} 
+                />
+              </div>
+              {pinnedProjects.includes(record.id) && (
+                <div style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(250, 173, 20, 0.3)',
+                  border: '2px solid #ffffff'
+                }}>
+                  <StarFilled style={{ color: '#ffffff', fontSize: '10px' }} />
+                </div>
+              )}
             </div>
-          )}
-        </Space>
-      ),
+            
+            {/* 项目信息 */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                border: '1px solid #f0f0f0',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s ease'
+              }}>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  {/* 标题行 */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    marginBottom: '4px'
+                  }}>
+                    <Text strong style={{ 
+                      color: getProjectThemeColor(), 
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                    }}>
+                      {text}
+                    </Text>
+                  </div>
+                  
+                  {/* 描述 */}
+                  <Text 
+                    type="secondary" 
+                    ellipsis 
+                    style={{ 
+                      fontSize: '14px', 
+                      lineHeight: '1.5',
+                      color: '#666666',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    {record.description}
+                  </Text>
+                  
+                  {/* 标签 */}
+                  {record.tags && record.tags.length > 0 && (
+                    <div style={{ 
+                      display: 'flex', 
+                      flexWrap: 'wrap', 
+                      gap: '6px',
+                      marginTop: '4px'
+                    }}>
+                      {record.tags.map(tag => (
+                        <Tag 
+                          key={tag} 
+                          size="small" 
+                          style={{ 
+                            background: `linear-gradient(135deg, ${getProjectThemeColor()}15 0%, ${getProjectThemeColor()}25 100%)`,
+                            border: `1px solid ${getProjectThemeColor()}30`,
+                            color: getProjectThemeColor(),
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            padding: '2px 8px',
+                            margin: 0,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                          }}
+                        >
+                          {tag}
+                        </Tag>
+                      ))}
+                    </div>
+                  )}
+                </Space>
+              </div>
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '状态',
@@ -451,48 +669,204 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
       key: 'status',
       render: (status) => {
         const statusConfig = {
-          active: { color: 'success', text: '进行中' },
-          completed: { color: 'default', text: '已完成' },
-          pending: { color: 'warning', text: '待审核' },
+          active: { 
+            color: '#52c41a', 
+            text: '进行中',
+            bgColor: '#f6ffed',
+            borderColor: '#b7eb8f'
+          },
+          completed: { 
+            color: '#1890ff', 
+            text: '已完成',
+            bgColor: '#e6f7ff',
+            borderColor: '#91d5ff'
+          },
+          pending: { 
+            color: '#faad14', 
+            text: '待审核',
+            bgColor: '#fffbe6',
+            borderColor: '#ffe58f'
+          },
         };
-        const config = statusConfig[status] || { color: 'default', text: '未知' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = statusConfig[status] || { 
+          color: '#8c8c8c', 
+          text: '未知',
+          bgColor: '#f5f5f5',
+          borderColor: '#d9d9d9'
+        };
+        
+        return (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '6px 12px',
+            borderRadius: '20px',
+            background: config.bgColor,
+            border: `1px solid ${config.borderColor}`,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: config.color,
+              marginRight: '6px',
+              boxShadow: `0 0 4px ${config.color}40`
+            }} />
+            <span style={{
+              color: config.color,
+              fontSize: '13px',
+              fontWeight: 500,
+              textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+            }}>
+              {config.text}
+            </span>
+          </div>
+        );
       },
     },
     {
       title: '负责人',
       dataIndex: 'owner_name',
       key: 'owner_name',
-      render: (text) => (
-        <Space>
-          <Avatar size="small" icon={<UserOutlined />} />
-          {text}
-        </Space>
-      ),
+      render: (text, record) => {
+        // 获取项目主题色
+        const getProjectThemeColor = () => {
+          if (isProjectOwner(record)) {
+            return '#1890ff'; // 蓝色 - 自己创建的项目
+          } else if (isProjectMember(record)) {
+            return '#52c41a'; // 绿色 - 被邀请参与的项目
+          } else {
+            return '#8c8c8c'; // 灰色 - 其他项目
+          }
+        };
+
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+            border: '1px solid #f0f0f0',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s ease'
+          }}>
+            <div style={{
+              position: 'relative',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: `linear-gradient(135deg, ${getProjectThemeColor()} 0%, ${getProjectThemeColor()}dd 100%)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: `0 2px 6px ${getProjectThemeColor()}30`,
+              border: '2px solid #ffffff'
+            }}>
+              <UserOutlined style={{ 
+                color: '#ffffff', 
+                fontSize: '16px',
+                filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))'
+              }} />
+            </div>
+            <span style={{
+              color: '#333333',
+              fontSize: '14px',
+              fontWeight: 500,
+              textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+            }}>
+              {text}
+            </span>
+          </div>
+        );
+      },
     },
     {
       title: '成员',
       dataIndex: 'member_count',
       key: 'member_count',
       render: (count, record) => (
-        <Space direction="vertical" size="small">
-          <Space>
-            <TeamOutlined />
-            <Text>{count} 人</Text>
-          </Space>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          border: '1px solid #f0f0f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          transition: 'all 0.2s ease'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <div style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '6px',
+              background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 4px rgba(82, 196, 26, 0.3)'
+            }}>
+              <TeamOutlined style={{ 
+                color: '#ffffff', 
+                fontSize: '12px',
+                filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))'
+              }} />
+            </div>
+            <span style={{
+              color: '#333333',
+              fontSize: '14px',
+              fontWeight: 500,
+              textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+            }}>
+              {count} 人
+            </span>
+          </div>
           {record.members_detail && record.members_detail.length > 0 && (
-            <div>
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '4px'
+            }}>
               {record.members_detail.slice(0, 3).map(member => (
-                <Tag key={member.user} size="small">
+                <div key={member.user} style={{
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+                  border: '1px solid #91d5ff',
+                  fontSize: '11px',
+                  color: '#1890ff',
+                  fontWeight: 500,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}>
                   {member.user_name}
-                </Tag>
+                </div>
               ))}
               {record.members_detail.length > 3 && (
-                <Tag size="small">+{record.members_detail.length - 3}</Tag>
+                <div style={{
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                  border: '1px solid #d9d9d9',
+                  fontSize: '11px',
+                  color: '#8c8c8c',
+                  fontWeight: 500,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}>
+                  +{record.members_detail.length - 3}
+                </div>
               )}
             </div>
           )}
-        </Space>
+        </div>
       ),
     },
     {
@@ -513,46 +887,6 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
           )}
         </Space>
       ),
-    },
-    {
-      title: '项目估值',
-      dataIndex: 'valuation',
-      key: 'valuation',
-      render: (valuation, record) => (
-        <Space direction="vertical" size="small">
-          <Text strong style={{ color: '#722ed1' }}>
-            ¥{Number(valuation || 0).toFixed(2)}
-          </Text>
-          {record.funding_rounds && (
-            <Tag size="small" color="purple">
-              第{record.funding_rounds}轮
-            </Tag>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: '我的股份',
-      key: 'my_equity',
-      render: (_, record) => {
-        // 计算用户在该项目的股份比例
-        const myMembership = record.members_detail?.find(m => m.user === user?.id);
-        const equityPercentage = myMembership?.equity_percentage || 0;
-        const investmentAmount = myMembership?.investment_amount || 0;
-        
-        return (
-          <Space direction="vertical" size="small">
-            <Text strong style={{ color: '#52c41a' }}>
-              {Number(equityPercentage || 0).toFixed(2)}%
-            </Text>
-            {Number(investmentAmount || 0) > 0 && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                投资¥{Number(investmentAmount || 0).toFixed(2)}
-              </Text>
-            )}
-          </Space>
-        );
-      },
     },
     {
       title: '创建时间',
@@ -620,6 +954,8 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
               message.info('项目设置功能待实现');
               break;
             case 'delete':
+              console.log('表格删除按钮被点击，项目ID:', record.id);
+              console.log('handleDeleteProject函数:', handleDeleteProject);
               Modal.confirm({
                 title: '确定要删除这个项目吗？',
                 content: `项目"${record.name}"将被永久删除，此操作不可撤销。`,
@@ -627,7 +963,12 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
                 okType: 'danger',
                 cancelText: '取消',
                 onOk: async () => {
-                  await handleDeleteProject(record.id);
+                  console.log('确认删除，调用handleDeleteProject');
+                  try {
+                    await handleDeleteProject(record.id);
+                  } catch (error) {
+                    console.error('删除项目时出错:', error);
+                  }
                 },
               });
               break;
@@ -870,46 +1211,185 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
         {viewingProject && (
           <Tabs activeKey={defaultDetailTab} onChange={setDefaultDetailTab}>
             <Tabs.TabPane tab="基本信息" key="info">
-              <Row gutter={[16, 16]}>
+              <Row gutter={[24, 24]}>
                 <Col span={12}>
-                  <Card title="项目概况" size="small">
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <div><Text strong>项目名称：</Text>{viewingProject.name}</div>
-                      <div><Text strong>项目描述：</Text>{viewingProject.description || '暂无描述'}</div>
-                      <div><Text strong>项目类型：</Text>{viewingProject.project_type || '其他'}</div>
-                      <div><Text strong>项目状态：</Text>
-                        <Tag color={
+                  <Card 
+                    title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <ProjectOutlined style={{ color: '#1890ff' }} />
+                          <span style={{ fontSize: '16px', fontWeight: '600' }}>项目概况</span>
+                        </div>
+                        <Tag 
+                          color={
                           viewingProject.status === 'active' ? 'success' : 
                           viewingProject.status === 'completed' ? 'default' : 'warning'
-                        }>
+                          }
+                          style={{ 
+                            fontSize: '12px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            fontWeight: '500'
+                          }}
+                        >
                           {viewingProject.status === 'active' ? '进行中' : 
                            viewingProject.status === 'completed' ? '已完成' : '待审核'}
                         </Tag>
                       </div>
-                      <div><Text strong>项目负责人：</Text>{viewingProject.owner_name}</div>
-                      <div><Text strong>成员数量：</Text>{viewingProject.member_count} 人</div>
-                      <div><Text strong>项目进度：</Text>
-                        <Progress percent={viewingProject.progress || 0} size="small" style={{ width: 200 }} />
+                    }
+                    size="small"
+                    style={{
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      border: '1px solid #f0f0f0'
+                    }}
+                    bodyStyle={{ padding: '20px' }}
+                  >
+                    <Space direction="vertical" style={{ width: '100%' }} size="large">
+                      {/* 项目名称 */}
+                      <div style={{ 
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        color: 'white',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                          {viewingProject.name}
                       </div>
-                      <div><Text strong>项目估值：</Text>
-                        <Text style={{ color: '#722ed1', fontWeight: 'bold' }}>
-                          ¥{Number(viewingProject.valuation || 0).toFixed(2)}
-                        </Text>
                       </div>
-                      <div><Text strong>融资轮次：</Text>
-                        {viewingProject.funding_rounds ? (
-                          <Tag color="purple">第{viewingProject.funding_rounds}轮</Tag>
-                        ) : (
-                          <Text type="secondary">暂未融资</Text>
-                        )}
+
+                      {/* 项目描述 */}
+                      <div style={{ 
+                        background: '#f8f9fa',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: '1px solid #e9ecef'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <FileTextOutlined style={{ color: '#6c757d', marginTop: '2px' }} />
+                          <div>
+                            <Text strong style={{ color: '#495057' }}>项目描述</Text>
+                            <div style={{ marginTop: '4px', color: '#6c757d', lineHeight: '1.5' }}>
+                              {viewingProject.description || '暂无描述'}
                       </div>
-                      <div><Text strong>创建时间：</Text>{new Date(viewingProject.created_at).toLocaleString()}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 项目基本信息网格 */}
+                      <Row gutter={[12, 12]}>
+                        <Col span={12}>
+                          <div style={{ 
+                            background: '#fff',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e9ecef',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ color: '#6c757d', fontSize: '12px', marginBottom: '4px' }}>项目类型</div>
+                            <div style={{ fontWeight: '600', color: '#495057' }}>
+                              {viewingProject.project_type || '其他'}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div style={{ 
+                            background: '#fff',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e9ecef',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ color: '#6c757d', fontSize: '12px', marginBottom: '4px' }}>成员数量</div>
+                            <div style={{ fontWeight: '600', color: '#495057' }}>
+                              {viewingProject.member_count} 人
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div style={{ 
+                            background: '#fff',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e9ecef',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ color: '#6c757d', fontSize: '12px', marginBottom: '4px' }}>项目负责人</div>
+                            <div style={{ fontWeight: '600', color: '#495057' }}>
+                              {viewingProject.owner_name}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div style={{ 
+                            background: '#fff',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e9ecef',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ color: '#6c757d', fontSize: '12px', marginBottom: '4px' }}>创建时间</div>
+                            <div style={{ fontWeight: '600', color: '#495057', fontSize: '12px' }}>
+                              {new Date(viewingProject.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+
+                      {/* 项目进度 */}
+                      <div style={{ 
+                        background: '#f8f9fa',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: '1px solid #e9ecef'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <BarChartOutlined style={{ color: '#6c757d' }} />
+                          <Text strong style={{ color: '#495057' }}>项目进度</Text>
+                        </div>
+                        <Progress 
+                          percent={viewingProject.progress || 0} 
+                          size="small" 
+                          strokeColor={{
+                            '0%': '#108ee9',
+                            '100%': '#87d068',
+                          }}
+                          style={{ marginBottom: '8px' }}
+                        />
+                        <div style={{ textAlign: 'center', color: '#6c757d', fontSize: '12px' }}>
+                          {viewingProject.progress || 0}% 完成
+                        </div>
+                      </div>
+
+
+                      {/* 项目标签 */}
                       {viewingProject.tag_list && viewingProject.tag_list.length > 0 && (
-                        <div>
-                          <Text strong>项目标签：</Text>
-                          <div style={{ marginTop: 4 }}>
+                        <div style={{ 
+                          background: '#f8f9fa',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          border: '1px solid #e9ecef'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <AppstoreOutlined style={{ color: '#6c757d' }} />
+                            <Text strong style={{ color: '#495057' }}>项目标签</Text>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                             {viewingProject.tag_list.map(tag => (
-                              <Tag key={tag} color="blue" size="small">{tag}</Tag>
+                              <Tag 
+                                key={tag} 
+                                color="blue" 
+                                size="small"
+                                style={{ 
+                                  borderRadius: '12px',
+                                  border: 'none',
+                                  background: 'linear-gradient(135deg, #1890ff 0%, #40a9ff 100%)',
+                                  color: 'white'
+                                }}
+                              >
+                                {tag}
+                              </Tag>
                             ))}
                           </div>
                         </div>
@@ -918,38 +1398,143 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
                   </Card>
                 </Col>
                 <Col span={12}>
-                  <Card title="项目成员与股份" size="small">
+                  <Card 
+                    title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <TeamOutlined style={{ color: '#52c41a' }} />
+                          <span style={{ fontSize: '16px', fontWeight: '600' }}>项目成员</span>
+                          <Badge 
+                            count={viewingProject.member_count || 0} 
+                            style={{ backgroundColor: '#52c41a' }}
+                          />
+                        </div>
+                        {isProjectOwner(viewingProject) && (
+                          <Button 
+                            type="primary" 
+                            size="small" 
+                            icon={<UserAddOutlined />}
+                            onClick={handleInviteMember}
+                            style={{ 
+                              backgroundColor: '#52c41a',
+                              borderColor: '#52c41a',
+                              borderRadius: '6px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            邀请成员
+                          </Button>
+                        )}
+                      </div>
+                    } 
+                    size="small"
+                    style={{
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      border: '1px solid #f0f0f0'
+                    }}
+                    bodyStyle={{ padding: '20px' }}
+                  >
                     {viewingProject.members_detail && viewingProject.members_detail.length > 0 ? (
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        {viewingProject.members_detail.map(member => (
-                          <div key={member.user} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Space>
-                              <Avatar size="small" icon={<UserOutlined />} />
-                              <span>{member.user_name}</span>
-                            </Space>
-                            <Space direction="vertical" size="small" style={{ textAlign: 'right' }}>
-                              <Text strong style={{ color: '#52c41a' }}>
-                                {Number(member.equity_percentage || 0).toFixed(2)}%
-                              </Text>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                        {viewingProject.members_detail.map((member, index) => (
+                          <div 
+                            key={member.user} 
+                            style={{ 
+                              background: index % 2 === 0 ? '#f8f9fa' : '#fff',
+                              borderRadius: '8px',
+                              padding: '12px',
+                              border: '1px solid #e9ecef',
+                              transition: 'all 0.3s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <Avatar 
+                                  size={40} 
+                                  icon={<UserOutlined />}
+                                  style={{ 
+                                    backgroundColor: '#52c41a',
+                                    border: '2px solid #fff',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                  }}
+                                />
+                                <div>
+                                  <div style={{ fontWeight: '600', color: '#495057', fontSize: '14px' }}>
+                                    {member.user_name}
+                                  </div>
+                                  <div style={{ color: '#6c757d', fontSize: '12px' }}>
+                                    项目成员
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ 
+                                  background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '12px',
+                                  fontWeight: 'bold',
+                                  marginBottom: '4px'
+                                }}>
+                                  {Number(member.equity_percentage || 0).toFixed(2)}% 股权
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
+                                  <div style={{ 
+                                    background: '#e6f7ff',
+                                    color: '#1890ff',
+                                    padding: '2px 6px',
+                                    borderRadius: '8px'
+                                  }}>
                                 贡献: {member.contribution_percentage || 0}%
-                              </Text>
+                                  </div>
                               {Number(member.investment_amount || 0) > 0 && (
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  投资: ¥{Number(member.investment_amount || 0).toFixed(2)}
-                                </Text>
-                              )}
-                            </Space>
+                                    <div style={{ 
+                                      background: '#fff7e6',
+                                      color: '#fa8c16',
+                                      padding: '2px 6px',
+                                      borderRadius: '8px'
+                                    }}>
+                                      投资: ¥{Number(member.investment_amount || 0).toFixed(0)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </Space>
                     ) : (
-                      <Text type="secondary">暂无成员信息</Text>
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '40px 20px',
+                        color: '#6c757d'
+                      }}>
+                        <UserOutlined style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }} />
+                        <div style={{ fontSize: '16px', marginBottom: '8px' }}>暂无成员信息</div>
+                        <div style={{ fontSize: '12px' }}>项目负责人可以邀请团队成员加入</div>
+                      </div>
                     )}
                   </Card>
                   
                   {/* 在基本信息页面添加项目动态 */}
-                  <Card title="最近动态" size="small" style={{ marginTop: 16 }}>
+                  <Card 
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CalendarOutlined style={{ color: '#fa8c16' }} />
+                        <span style={{ fontSize: '16px', fontWeight: '600' }}>最近动态</span>
+                      </div>
+                    }
+                    size="small" 
+                    style={{ 
+                      marginTop: 16,
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      border: '1px solid #f0f0f0'
+                    }}
+                    bodyStyle={{ padding: '20px' }}
+                  >
                     <ProjectLogs projectId={viewingProject.id} showTitle={false} maxHeight={200} />
                   </Card>
                 </Col>
@@ -1002,8 +1587,89 @@ const Projects = ({ onProjectSelect, viewMode = 'card', searchText = '', sortBy 
             <Tabs.TabPane tab="项目投票" key="voting">
               <Voting projectId={viewingProject.id} />
             </Tabs.TabPane>
+            
+            {/* 项目日志 - 只有管理员和创建者可见 */}
+            {canViewProjectLogs(viewingProject) && (
+              <Tabs.TabPane tab="项目日志" key="logs">
+                <Card 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileTextOutlined style={{ color: '#1890ff' }} />
+                      <span style={{ fontSize: '16px', fontWeight: '600' }}>项目操作日志</span>
+                    </div>
+                  }
+                  style={{
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    border: '1px solid #f0f0f0'
+                  }}
+                  bodyStyle={{ padding: '20px' }}
+                >
+                  <ProjectLogs 
+                    projectId={viewingProject.id} 
+                    showTitle={false} 
+                    maxHeight={600}
+                    showAllLogs={true}
+                  />
+                </Card>
+              </Tabs.TabPane>
+            )}
           </Tabs>
         )}
+      </Modal>
+
+      {/* 邀请成员弹窗 */}
+      <Modal
+        title="邀请成员"
+        open={isInviteModalVisible}
+        onCancel={handleInviteModalCancel}
+        footer={[
+          <Button key="copy" type="primary" onClick={handleCopyInviteCode}>
+            复制邀请码
+          </Button>,
+          <Button key="close" onClick={handleInviteModalCancel}>
+            关闭
+          </Button>
+        ]}
+        width={500}
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <div style={{
+            fontSize: '16px',
+            color: '#333',
+            marginBottom: '20px'
+          }}>
+            项目邀请码已生成
+          </div>
+          
+          <div style={{
+            background: '#f6f8fa',
+            border: '2px dashed #d0d7de',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: '#1890ff',
+              letterSpacing: '2px',
+              fontFamily: 'monospace'
+            }}>
+              {inviteCode}
+            </div>
+          </div>
+          
+          <div style={{
+            fontSize: '14px',
+            color: '#666',
+            lineHeight: '1.5'
+          }}>
+            <p>请将邀请码发送给要邀请的用户</p>
+            <p>用户可以在项目管理页面点击"参与项目"按钮</p>
+            <p>然后输入此邀请码加入项目</p>
+          </div>
+        </div>
       </Modal>
     </div>
   );

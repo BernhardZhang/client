@@ -84,7 +84,9 @@ const IntegratedProjectManagement = () => {
   const [sortBy, setSortBy] = useState('create_time');
   const [sortOrder, setSortOrder] = useState('desc');
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [isJoinModalVisible, setIsJoinModalVisible] = useState(false);
   const [createForm] = Form.useForm();
+  const [joinForm] = Form.useForm();
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,20 +162,78 @@ const IntegratedProjectManagement = () => {
     createForm.resetFields();
   };
 
-  // 获取项目数据（包括公开项目）
+  const handleJoinProject = () => {
+    if (!isAuthenticated()) {
+      handleLoginRequired();
+      return;
+    }
+    setIsJoinModalVisible(true);
+    joinForm.resetFields();
+  };
+
+  const handleJoinModalOk = async () => {
+    try {
+      const values = await joinForm.validateFields();
+      // 这里调用参与项目的API
+      const result = await joinProjectByCode(values.joinCode);
+      if (result.success) {
+        message.success('成功参与项目！');
+        setIsJoinModalVisible(false);
+        joinForm.resetFields();
+        fetchProjects(); // 刷新项目列表
+      } else {
+        message.error(result.error || '参与项目失败');
+      }
+    } catch (error) {
+      console.error('Join project error:', error);
+      message.error('参与项目失败');
+    }
+  };
+
+  const handleJoinModalCancel = () => {
+    setIsJoinModalVisible(false);
+    joinForm.resetFields();
+  };
+
+  // 参与项目的API调用函数
+  const joinProjectByCode = async (joinCode) => {
+    try {
+      const response = await fetch('/api/projects/join-by-code/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ join_code: joinCode }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.error || '参与项目失败' };
+      }
+    } catch (error) {
+      console.error('Join project API error:', error);
+      return { success: false, error: '网络错误，请稍后重试' };
+    }
+  };
+
+  // 获取项目数据（只显示用户相关项目）
   const allProjects = projects || [];
+  
+  // 只显示用户自己创建的项目和被邀请参与的项目
   const userProjects = isAuthenticated() ? allProjects.filter(project => 
     project.owner === user?.id || 
     project.members_detail?.some(member => member.user === user?.id)
   ) : [];
 
-  const publicProjects = allProjects.filter(project => project.is_public);
+  // 未登录用户不显示任何项目
+  const displayProjects = isAuthenticated() ? userProjects : [];
 
-  // 显示的项目列表
-  const displayProjects = isAuthenticated() ? userProjects : publicProjects;
-
-  // 计算统计数据
-  const statsProjects = isAuthenticated() ? userProjects : publicProjects;
+  // 计算统计数据（只基于用户相关项目）
+  const statsProjects = isAuthenticated() ? userProjects : [];
 
   // 从项目数据中计算任务统计
   const projectTasks = statsProjects.reduce((acc, project) => {
@@ -516,6 +576,18 @@ const IntegratedProjectManagement = () => {
                 >
                   创建项目
                 </Button>
+                <Button
+                  type="primary"
+                  icon={<TeamOutlined />}
+                  onClick={handleJoinProject}
+                  style={{ 
+                    marginLeft: 8,
+                    backgroundColor: '#52c41a',
+                    borderColor: '#52c41a'
+                  }}
+                >
+                  参与项目
+                </Button>
                 <Button.Group>
                   <Tooltip title="卡片视图">
                     <Button 
@@ -549,6 +621,7 @@ const IntegratedProjectManagement = () => {
               searchText={searchText}
               sortBy={sortBy}
               sortOrder={sortOrder}
+              activeTab={activeTab}
             />
           </Card>
         </Content>
@@ -625,6 +698,49 @@ const IntegratedProjectManagement = () => {
         onClose={() => setRegisterModalVisible(false)}
         onSwitchToLogin={handleSwitchToLogin}
       />
+
+      {/* 参与项目Modal */}
+      <Modal
+        title="参与项目"
+        open={isJoinModalVisible}
+        onOk={handleJoinModalOk}
+        onCancel={handleJoinModalCancel}
+        confirmLoading={isLoading}
+        width={500}
+      >
+        <Form
+          form={joinForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="joinCode"
+            label="参与验证码"
+            rules={[
+              { required: true, message: '请输入参与验证码！' },
+              { min: 6, message: '验证码至少6位！' },
+              { max: 20, message: '验证码不能超过20位！' },
+            ]}
+          >
+            <Input 
+              placeholder="请输入项目参与验证码" 
+              style={{ fontSize: 16, letterSpacing: 2 }}
+            />
+          </Form.Item>
+          
+          <div style={{ 
+            background: '#f6f8fa', 
+            padding: 12, 
+            borderRadius: 6, 
+            marginTop: 16,
+            fontSize: 13,
+            color: '#586069'
+          }}>
+            <Text type="secondary">
+              💡 提示：参与验证码由项目创建者提供，输入正确的验证码即可参与项目。
+            </Text>
+          </div>
+        </Form>
+      </Modal>
     </Layout>
   );
 };

@@ -110,7 +110,11 @@ const useProjectStore = create((set, get) => ({
       
       // 错误处理
       let errorMessage = '删除项目失败';
-      if (error.response?.data) {
+      
+      // 处理403权限错误
+      if (error.response?.status === 403) {
+        errorMessage = '您没有权限删除此项目，只有项目所有者可以删除项目';
+      } else if (error.response?.data) {
         if (error.response.data.error) {
           errorMessage = error.response.data.error;
         } else if (error.response.data.message) {

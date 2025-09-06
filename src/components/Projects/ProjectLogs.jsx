@@ -113,22 +113,79 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
 
   const getLogIcon = (logType) => {
     const iconMap = {
+      // 项目相关操作
       'project_created': <PlusOutlined style={{ color: '#52c41a' }} />,
       'project_updated': <EditOutlined style={{ color: '#1890ff' }} />,
+      'project_deleted': <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+      'project_archived': <FileTextOutlined style={{ color: '#8c8c8c' }} />,
+      'project_restored': <FileTextOutlined style={{ color: '#52c41a' }} />,
+      
+      // 成员管理操作
       'member_joined': <TeamOutlined style={{ color: '#722ed1' }} />,
       'member_left': <TeamOutlined style={{ color: '#ff4d4f' }} />,
       'member_role_changed': <SettingOutlined style={{ color: '#fa8c16' }} />,
+      'member_invited': <TeamOutlined style={{ color: '#13c2c2' }} />,
+      'member_removed': <DeleteOutlined style={{ color: '#ff7875' }} />,
+      'member_permission_changed': <SettingOutlined style={{ color: '#fa8c16' }} />,
+      
+      // 任务相关操作
       'task_created': <FileTextOutlined style={{ color: '#13c2c2' }} />,
       'task_updated': <EditOutlined style={{ color: '#2f54eb' }} />,
       'task_completed': <CheckCircleOutlined style={{ color: '#52c41a' }} />,
       'task_deleted': <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+      'task_assigned': <UserOutlined style={{ color: '#722ed1' }} />,
+      'task_reassigned': <UserOutlined style={{ color: '#fa8c16' }} />,
+      'task_priority_changed': <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />,
+      'task_deadline_changed': <ClockCircleOutlined style={{ color: '#1890ff' }} />,
+      'task_progress_updated': <BarChartOutlined style={{ color: '#52c41a' }} />,
+      'task_status_changed': <ExclamationCircleOutlined style={{ color: '#ff9c6e' }} />,
+      
+      // 文件操作
       'file_uploaded': <FileTextOutlined style={{ color: '#fa541c' }} />,
       'file_deleted': <DeleteOutlined style={{ color: '#ff7875' }} />,
+      'file_downloaded': <FileTextOutlined style={{ color: '#1890ff' }} />,
+      'file_shared': <FileTextOutlined style={{ color: '#52c41a' }} />,
+      
+      // 评论和沟通
+      'comment_added': <FileTextOutlined style={{ color: '#40a9ff' }} />,
+      'comment_updated': <EditOutlined style={{ color: '#1890ff' }} />,
+      'comment_deleted': <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+      'message_sent': <FileTextOutlined style={{ color: '#722ed1' }} />,
+      
+      // 评分和评估
       'rating_created': <BulbOutlined style={{ color: '#fadb14' }} />,
       'rating_completed': <CheckCircleOutlined style={{ color: '#73d13d' }} />,
-      'comment_added': <FileTextOutlined style={{ color: '#40a9ff' }} />,
+      'evaluation_started': <BulbOutlined style={{ color: '#fa8c16' }} />,
+      'evaluation_completed': <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      'points_awarded': <BulbOutlined style={{ color: '#fadb14' }} />,
+      'points_deducted': <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+      
+      // 项目状态和里程碑
       'milestone_reached': <BulbOutlined style={{ color: '#ffa940' }} />,
+      'milestone_created': <PlusOutlined style={{ color: '#52c41a' }} />,
+      'milestone_updated': <EditOutlined style={{ color: '#1890ff' }} />,
       'status_changed': <ExclamationCircleOutlined style={{ color: '#ff9c6e' }} />,
+      'progress_updated': <BarChartOutlined style={{ color: '#52c41a' }} />,
+      
+      // 投票和决策
+      'vote_created': <BulbOutlined style={{ color: '#722ed1' }} />,
+      'vote_participated': <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      'vote_completed': <CheckCircleOutlined style={{ color: '#73d13d' }} />,
+      'decision_made': <BulbOutlined style={{ color: '#fa8c16' }} />,
+      
+      // 财务相关
+      'investment_made': <BulbOutlined style={{ color: '#fadb14' }} />,
+      'revenue_recorded': <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      'expense_recorded': <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+      'valuation_updated': <BarChartOutlined style={{ color: '#1890ff' }} />,
+      
+      // 系统操作
+      'backup_created': <FileTextOutlined style={{ color: '#8c8c8c' }} />,
+      'settings_changed': <SettingOutlined style={{ color: '#fa8c16' }} />,
+      'permission_granted': <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      'permission_revoked': <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+      
+      // 其他操作
       'other': <ClockCircleOutlined style={{ color: '#8c8c8c' }} />,
     };
     
@@ -137,22 +194,79 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
 
   const getLogTypeColor = (logType) => {
     const colorMap = {
+      // 项目相关操作
       'project_created': 'success',
       'project_updated': 'processing',
+      'project_deleted': 'error',
+      'project_archived': 'default',
+      'project_restored': 'success',
+      
+      // 成员管理操作
       'member_joined': 'purple',
       'member_left': 'error',
       'member_role_changed': 'warning',
+      'member_invited': 'cyan',
+      'member_removed': 'red',
+      'member_permission_changed': 'warning',
+      
+      // 任务相关操作
       'task_created': 'cyan',
       'task_updated': 'geekblue',
       'task_completed': 'success',
       'task_deleted': 'error',
+      'task_assigned': 'purple',
+      'task_reassigned': 'warning',
+      'task_priority_changed': 'warning',
+      'task_deadline_changed': 'processing',
+      'task_progress_updated': 'success',
+      'task_status_changed': 'magenta',
+      
+      // 文件操作
       'file_uploaded': 'orange',
       'file_deleted': 'red',
+      'file_downloaded': 'processing',
+      'file_shared': 'success',
+      
+      // 评论和沟通
+      'comment_added': 'blue',
+      'comment_updated': 'processing',
+      'comment_deleted': 'error',
+      'message_sent': 'purple',
+      
+      // 评分和评估
       'rating_created': 'gold',
       'rating_completed': 'lime',
-      'comment_added': 'blue',
+      'evaluation_started': 'warning',
+      'evaluation_completed': 'success',
+      'points_awarded': 'gold',
+      'points_deducted': 'error',
+      
+      // 项目状态和里程碑
       'milestone_reached': 'volcano',
+      'milestone_created': 'success',
+      'milestone_updated': 'processing',
       'status_changed': 'magenta',
+      'progress_updated': 'success',
+      
+      // 投票和决策
+      'vote_created': 'purple',
+      'vote_participated': 'success',
+      'vote_completed': 'lime',
+      'decision_made': 'warning',
+      
+      // 财务相关
+      'investment_made': 'gold',
+      'revenue_recorded': 'success',
+      'expense_recorded': 'error',
+      'valuation_updated': 'processing',
+      
+      // 系统操作
+      'backup_created': 'default',
+      'settings_changed': 'warning',
+      'permission_granted': 'success',
+      'permission_revoked': 'error',
+      
+      // 其他操作
       'other': 'default',
     };
     
@@ -191,9 +305,31 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
           </div>
         )}
         
+        {/* 显示操作详细信息 */}
+        <div style={{ marginBottom: 8 }}>
+          <Space size="small" wrap>
+            {log.action_method && (
+              <Tag size="small" color="blue">
+                方法: {log.action_method}
+              </Tag>
+            )}
+            {log.action_function && (
+              <Tag size="small" color="green">
+                功能: {log.action_function}
+              </Tag>
+            )}
+            {log.ip_address && (
+              <Tag size="small" color="default">
+                IP: {log.ip_address}
+              </Tag>
+            )}
+          </Space>
+        </div>
+        
+        {/* 显示相关对象信息 */}
         {(log.related_task_title || log.related_user_name) && (
-          <div>
-            <Space size="small">
+          <div style={{ marginBottom: 8 }}>
+            <Space size="small" wrap>
               {log.related_task_title && (
                 <Tag size="small" color="blue">
                   任务: {log.related_task_title}
@@ -204,6 +340,28 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
                   用户: {log.related_user_name}
                 </Tag>
               )}
+            </Space>
+          </div>
+        )}
+        
+        {/* 显示变更信息 */}
+        {log.changes && Object.keys(log.changes).length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              变更内容: {JSON.stringify(log.changes, null, 2)}
+            </Text>
+          </div>
+        )}
+        
+        {/* 显示元数据 */}
+        {log.metadata && Object.keys(log.metadata).length > 0 && (
+          <div>
+            <Space size="small" wrap>
+              {Object.entries(log.metadata).map(([key, value]) => (
+                <Tag key={key} size="small" color="default">
+                  {key}: {String(value)}
+                </Tag>
+              ))}
             </Space>
           </div>
         )}
