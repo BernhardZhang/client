@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntdApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ResponsiveLayout from './components/Layout/ResponsiveLayout';
 import Dashboard from './components/Dashboard/Dashboard';
@@ -33,47 +33,49 @@ function App() {
 
   return (
     <ConfigProvider locale={zhCN}>
-      <Router>
-        <div className="App">
-          <Routes>
-            {/* 首页使用新的左中右布局 */}
-            <Route path="/" element={<PublicHome />} />
-            
-            {/* 项目管理页面使用新的左中右布局 */}
-            <Route path="/projects" element={<IntegratedProjectManagement />} />
-            
-            {/* 项目大厅页面使用新的左中右布局 */}
-            <Route path="/task-hall" element={<TaskHall />} />
-            
-            {/* 项目大厅页面使用新的左中右布局 */}
-            <Route path="/project-hall" element={<TaskHall />} />
-            
-            {/* 积分系统页面使用新的左中右布局 */}
-            <Route path="/points" element={<Points />} />
-            
-            {/* 财务管理页面使用新的左中右布局 */}
-            <Route path="/finance" element={<Finance />} />
-            
-            {/* 数据分析页面使用新的左中右布局 */}
-            <Route path="/evaluation" element={<DataAnalysis />} />
-            
-            {/* 其他页面使用ResponsiveLayout */}
-            <Route path="/dashboard" element={<ResponsiveLayout />}>
-              <Route index element={<Dashboard />} />
-            </Route>
-            
-            {/* 项目详情页 */}
-            <Route path="/projects/:projectId" element={<PublicRoute><ProjectTasksPage /></PublicRoute>} />
-            <Route path="/public/projects/:projectId" element={<PublicRoute><PublicProject /></PublicRoute>} />
-            
-            {/* 兼容旧路由 */}
-            <Route path="/public" element={<Navigate to="/" />} />
-            <Route path="/app/*" element={<Navigate to="/" />} />
-            <Route path="/login" element={<Navigate to="/" />} />
-            <Route path="/register" element={<Navigate to="/" />} />
-          </Routes>
-        </div>
-      </Router>
+      <AntdApp>
+        <Router>
+          <div className="App">
+            <Routes>
+              {/* 首页使用新的左中右布局 */}
+              <Route path="/" element={<PublicHome />} />
+              
+              {/* 项目管理页面使用新的左中右布局 */}
+              <Route path="/projects" element={<IntegratedProjectManagement />} />
+              
+              {/* 项目大厅页面使用新的左中右布局 */}
+              <Route path="/task-hall" element={<TaskHall />} />
+              
+              {/* 项目大厅页面使用新的左中右布局 */}
+              <Route path="/project-hall" element={<TaskHall />} />
+              
+              {/* 积分系统页面使用新的左中右布局 */}
+              <Route path="/points" element={<Points />} />
+              
+              {/* 财务管理页面使用新的左中右布局 */}
+              <Route path="/finance" element={<Finance />} />
+              
+              {/* 数据分析页面使用新的左中右布局 */}
+              <Route path="/evaluation" element={<DataAnalysis />} />
+              
+              {/* 其他页面使用ResponsiveLayout */}
+              <Route path="/dashboard" element={<ResponsiveLayout />}>
+                <Route index element={<Dashboard />} />
+              </Route>
+              
+              {/* 项目详情页 */}
+              <Route path="/projects/:projectId" element={<PublicRoute><ProjectTasksPage /></PublicRoute>} />
+              <Route path="/public/projects/:projectId" element={<PublicRoute><PublicProject /></PublicRoute>} />
+              
+              {/* 兼容旧路由 */}
+              <Route path="/public" element={<Navigate to="/" />} />
+              <Route path="/app/*" element={<Navigate to="/" />} />
+              <Route path="/login" element={<Navigate to="/" />} />
+              <Route path="/register" element={<Navigate to="/" />} />
+            </Routes>
+          </div>
+        </Router>
+      </AntdApp>
     </ConfigProvider>
   )
 }

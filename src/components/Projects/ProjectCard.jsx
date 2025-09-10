@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography, Modal } from 'antd';
+import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography, Modal, App } from 'antd';
 import {
   TeamOutlined,
   StarFilled,
@@ -38,8 +38,7 @@ const ProjectCard = ({
   onManageAnalytics,
   onManageVoting,
 }) => {
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { modal } = App.useApp();
 
   // 调试信息
   console.log('ProjectCard received project:', project);
@@ -54,34 +53,34 @@ const ProjectCard = ({
     e.stopPropagation();
     e.preventDefault();
     console.log('删除按钮被点击，项目ID:', project.id);
-    console.log('onDelete函数:', onDelete);
+    console.log('modal对象:', modal);
     
     if (!onDelete) {
       console.error('onDelete函数未定义');
       return;
     }
     
-    setDeleteModalVisible(true);
-  };
-
-  // 确认删除
-  const handleConfirmDelete = async () => {
-    console.log('确认删除，调用onDelete函数');
-    setIsDeleting(true);
-    try {
-      await onDelete(project.id);
-      setDeleteModalVisible(false);
-    } catch (error) {
-      console.error('删除项目时出错:', error);
-      setDeleteModalVisible(false);
-      setIsDeleting(false);
-    }
-  };
-
-  // 取消删除
-  const handleCancelDelete = () => {
-    console.log('取消删除操作');
-    setDeleteModalVisible(false);
+    // 使用现代的 modal hooks API
+    console.log('即将显示Modal确认对话框');
+    modal.confirm({
+      title: '确定要删除这个项目吗？',
+      content: `项目"${project.name}"将被永久删除，此操作不可撤销。`,
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        console.log('确认删除，调用onDelete函数');
+        try {
+          await onDelete(project.id);
+        } catch (error) {
+          console.error('删除项目时出错:', error);
+        }
+      },
+      onCancel: () => {
+        console.log('取消删除操作');
+      },
+    });
+    console.log('modal.confirm已调用');
   };
   const getStatusColor = (status) => {
     const statusConfig = {
@@ -134,7 +133,7 @@ const ProjectCard = ({
         flexDirection: 'column',
         background: '#ffffff'
       }}
-      onClick={isDeleting ? undefined : () => onView(project)}
+      onClick={() => onView(project)}
       actions={[
         <Tooltip title="基本信息">
           <Button
@@ -531,9 +530,6 @@ const ProjectCard = ({
               size="small"
               icon={<DeleteOutlined />}
               onClick={handleDeleteClick}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
               style={{ 
                 color: '#ef4444',
                 width: 32,
@@ -609,25 +605,6 @@ const ProjectCard = ({
           100% { background-position: 200% 0; }
         }
       `}</style>
-
-      {/* 删除确认对话框 */}
-      <Modal
-        title="确定要删除这个项目吗？"
-        open={deleteModalVisible}
-        onOk={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-        okText="确定删除"
-        cancelText="取消"
-        okType="danger"
-        centered
-        maskClosable={false}
-        keyboard={true}
-        zIndex={1000}
-        getContainer={() => document.body}
-        destroyOnClose={true}
-      >
-        <p>项目"{project.name}"将被永久删除，此操作不可撤销。</p>
-      </Modal>
     </Card>
   );
 };
