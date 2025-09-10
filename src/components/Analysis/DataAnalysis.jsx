@@ -41,7 +41,8 @@ import {
     PieChartOutlined,
     LineChartOutlined,
     RadarChartOutlined,
-    AreaChartOutlined
+    AreaChartOutlined,
+    AppstoreOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -191,7 +192,7 @@ const DataAnalysis = () => {
         },
         {
             key: '/task-hall',
-            icon: <CheckCircleOutlined />,
+            icon: <AppstoreOutlined />,
             label: '项目大厅',
         },
         {

@@ -49,7 +49,8 @@ import {
   BellOutlined,
   MessageOutlined,
   FileTextOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
@@ -142,7 +143,7 @@ const Points = () => {
     },
     {
       key: '/task-hall',
-      icon: <CheckCircleOutlined />,
+      icon: <AppstoreOutlined />,
       label: '项目大厅',
     },
     {

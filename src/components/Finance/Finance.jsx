@@ -40,7 +40,8 @@ import {
   SettingOutlined,
   BellOutlined,
   MessageOutlined,
-  UserOutlined
+  UserOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -163,7 +164,7 @@ const Finance = () => {
     },
     {
       key: '/task-hall',
-      icon: <CheckCircleOutlined />,
+      icon: <AppstoreOutlined />,
       label: '项目大厅',
     },
     {
