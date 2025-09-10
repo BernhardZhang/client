@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography, Modal } from 'antd';
 import {
   TeamOutlined,
@@ -38,6 +38,9 @@ const ProjectCard = ({
   onManageAnalytics,
   onManageVoting,
 }) => {
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // 调试信息
   console.log('ProjectCard received project:', project);
   console.log('Project name:', project?.name);
@@ -58,21 +61,27 @@ const ProjectCard = ({
       return;
     }
     
-    Modal.confirm({
-      title: '确定要删除这个项目吗？',
-      content: `项目"${project.name}"将被永久删除，此操作不可撤销。`,
-      okText: '确定删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        console.log('确认删除，调用onDelete函数');
-        try {
-          await onDelete(project.id);
-        } catch (error) {
-          console.error('删除项目时出错:', error);
-        }
-      },
-    });
+    setDeleteModalVisible(true);
+  };
+
+  // 确认删除
+  const handleConfirmDelete = async () => {
+    console.log('确认删除，调用onDelete函数');
+    setIsDeleting(true);
+    try {
+      await onDelete(project.id);
+      setDeleteModalVisible(false);
+    } catch (error) {
+      console.error('删除项目时出错:', error);
+      setDeleteModalVisible(false);
+      setIsDeleting(false);
+    }
+  };
+
+  // 取消删除
+  const handleCancelDelete = () => {
+    console.log('取消删除操作');
+    setDeleteModalVisible(false);
   };
   const getStatusColor = (status) => {
     const statusConfig = {
@@ -125,7 +134,7 @@ const ProjectCard = ({
         flexDirection: 'column',
         background: '#ffffff'
       }}
-      onClick={() => onView(project)}
+      onClick={isDeleting ? undefined : () => onView(project)}
       actions={[
         <Tooltip title="基本信息">
           <Button
@@ -522,6 +531,9 @@ const ProjectCard = ({
               size="small"
               icon={<DeleteOutlined />}
               onClick={handleDeleteClick}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
               style={{ 
                 color: '#ef4444',
                 width: 32,
@@ -529,7 +541,7 @@ const ProjectCard = ({
                 borderRadius: 6,
                 transition: 'all 0.2s ease',
                 position: 'relative',
-                zIndex: 10,
+                zIndex: 999,
                 pointerEvents: 'auto'
               }}
             />
@@ -597,6 +609,25 @@ const ProjectCard = ({
           100% { background-position: 200% 0; }
         }
       `}</style>
+
+      {/* 删除确认对话框 */}
+      <Modal
+        title="确定要删除这个项目吗？"
+        open={deleteModalVisible}
+        onOk={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        okText="确定删除"
+        cancelText="取消"
+        okType="danger"
+        centered
+        maskClosable={false}
+        keyboard={true}
+        zIndex={1000}
+        getContainer={() => document.body}
+        destroyOnClose={true}
+      >
+        <p>项目"{project.name}"将被永久删除，此操作不可撤销。</p>
+      </Modal>
     </Card>
   );
 };
