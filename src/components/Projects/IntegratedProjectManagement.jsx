@@ -66,6 +66,7 @@ import useProjectStore from '../../stores/projectStore';
 import LoginDialog from '../Auth/LoginDialog';
 import RegisterDialog from '../Auth/RegisterDialog';
 import './IntegratedProjectManagement.css';
+import api from "../../services/api.js";
 
 const { Title, Text, Paragraph } = Typography;
 const { Sider, Content } = Layout;
@@ -198,18 +199,13 @@ const IntegratedProjectManagement = () => {
   // 参与项目的API调用函数
   const joinProjectByCode = async (joinCode) => {
     try {
-      const response = await fetch('/api/projects/join-by-code/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ join_code: joinCode }),
+      const response = await api.post('/projects/join-by-code/', {
+          join_code: joinCode
       });
       
-      const data = await response.json();
+      const data = await response.data;
       
-      if (response.ok) {
+      if (response.status == 200) {
         return { success: true, data };
       } else {
         return { success: false, error: data.error || '参与项目失败' };

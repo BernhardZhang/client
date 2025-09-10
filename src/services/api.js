@@ -2,19 +2,14 @@ import axios from 'axios';
 
 // Function to load config
 const loadConfig = async () => {
-    try {
-        const response = await fetch('/config.json');
-        const config = await response.json();
-        return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
-    } catch (error) {
-        console.error('Failed to load config, using default:', error);
-        return 'http://127.0.0.1:8000/api';
-    }
+    const response = await fetch('/config.json');
+    const config = await response.json();
+    return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
 };
 
 // Create axios instance with default URL (will be updated after config loads)
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
+  baseURL: '/api', // Default to relative path, will be updated by initializeAPI
   headers: {
     'Content-Type': 'application/json',
   },

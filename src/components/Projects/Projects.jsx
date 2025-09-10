@@ -62,6 +62,7 @@ import ProjectTeamEvaluation from './ProjectTeamEvaluation';
 import ProjectTasks from './ProjectTasks';
 import ProjectCardGrid from './ProjectCardGrid';
 import Voting from '../Voting/Voting';
+import api from '../../services/api';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -461,20 +462,13 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
       message.error('项目信息不存在');
       return;
     }
-    
-    try {
+
       // 生成邀请码
-      const response = await fetch(`/api/projects/${viewingProject.id}/generate-invite-code/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
+      const response = await api.post(`/projects/${viewingProject.id}/generate-invite-code/`);
+
+      const data = await response.data;
+
+      if (response.status == 200) {
         setInviteCode(data.invite_code);
         setIsInviteModalVisible(true);
         message.success('邀请码生成成功');
@@ -486,15 +480,6 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
         setIsInviteModalVisible(true);
         message.success('邀请码生成成功（演示模式）');
       }
-    } catch (error) {
-      console.error('Generate invite code error:', error);
-      // 如果网络错误，使用模拟数据
-      console.warn('网络错误，使用模拟邀请码');
-      const mockInviteCode = `INV${viewingProject.id}${Date.now().toString().slice(-6)}`;
-      setInviteCode(mockInviteCode);
-      setIsInviteModalVisible(true);
-      message.success('邀请码生成成功（演示模式）');
-    }
   };
 
   // 关闭邀请弹窗
