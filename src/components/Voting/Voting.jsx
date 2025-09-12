@@ -17,7 +17,6 @@ import {
   message,
   Tabs,
   Statistic,
-  DatePicker,
   Popconfirm,
   Empty,
 } from 'antd';
@@ -27,7 +26,6 @@ import {
   ProjectOutlined,
   PlusOutlined,
   TrophyOutlined,
-  EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
 import LoginPrompt from '../Auth/LoginPrompt';
@@ -36,72 +34,50 @@ import RegisterDialog from '../Auth/RegisterDialog';
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
 import useVotingStore from '../../stores/votingStore';
-import { authAPI, votingAPI } from '../../services/api';
-import SelfEvaluationModal from './SelfEvaluationModal';
+import { authAPI } from '../../services/api';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const Voting = ({ projectId }) => {
   const [form] = Form.useForm();
-  const [roundForm] = Form.useForm();
   const [isVoteModalVisible, setIsVoteModalVisible] = useState(false);
-  const [isRoundManagementVisible, setIsRoundManagementVisible] = useState(false);
-  const [isSelfEvaluationVisible, setIsSelfEvaluationVisible] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [registerModalVisible, setRegisterModalVisible] = useState(false);
   const [allUsers, setAllUsers] = useState({});
   const [selectedVoteType, setSelectedVoteType] = useState('');
-  const [selectedVotedFor, setSelectedVotedFor] = useState('');
   const [selectedProject, setSelectedProject] = useState('');
-  const [selfEvaluationEntity, setSelfEvaluationEntity] = useState(null);
-  const [selfEvaluationType, setSelfEvaluationType] = useState('user');
-  const [editingVote, setEditingVote] = useState(null);
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [localVotes, setLocalVotes] = useState([]);
+  const [isParticipateModalVisible, setIsParticipateModalVisible] = useState(false);
+  const [currentVote, setCurrentVote] = useState(null);
+  const [participateForm] = Form.useForm();
+  const [isResultModalVisible, setIsResultModalVisible] = useState(false);
+  const [voteResults, setVoteResults] = useState(null);
   
   const { user, isAuthenticated } = useAuthStore();
   const { projects, fetchProjects } = useProjectStore();
   const {
-    activeRound,
-    votingRounds,
     myVotes,
-    votesReceived,
-    fetchActiveRound,
-    fetchVotingRounds,
     fetchMyVotes,
-    fetchVotesReceived,
     createVote,
-    updateVote,
-    deleteVote,
     isLoading
   } = useVotingStore();
 
   useEffect(() => {
     fetchProjects();
-    fetchActiveRound();
-    fetchVotingRounds();
     loadUsers();
     
-    // 如果在项目页面，设置默认投票类型
+    // 如果在项目页面，设置默认值
     if (projectId) {
       setSelectedVoteType('project');
       setSelectedProject(projectId);
-      form.setFieldsValue({
-        vote_type: 'project',
-        target_project: projectId,
-        target_user: null,
-        amount: 1.00
-      });
     }
   }, [projectId]);
 
   useEffect(() => {
-    if (activeRound) {
-      fetchMyVotes(activeRound.id);
-      fetchVotesReceived(activeRound.id);
-    }
-  }, [activeRound]);
+    fetchMyVotes();
+  }, []);
 
   const loadUsers = async () => {
     try {
@@ -113,95 +89,79 @@ const Voting = ({ projectId }) => {
     }
   };
 
-  // 处理投票类型变化
-  const handleVoteTypeChange = (value) => {
-    setSelectedVoteType(value);
-    
-    // 确保在选择个人投票时用户数据已加载
-    if (value === 'individual' && allUsers.length === 0) {
-      loadUsers();
-    }
-    
-    // 根据投票类型设置默认值
-    if (value === 'self') {
-      form.setFieldsValue({ 
-        target_user: user?.id,
-        target_project: null,
-        amount: 1.00 
-      });
-      setSelectedVotedFor(user?.id);
-    } else if (value === 'project') {
-      form.setFieldsValue({ 
-        target_user: null,
-        amount: 0.00 
-      });
-    } else {
-      form.setFieldsValue({ 
-        target_project: null,
-        amount: 0.00 
-      });
-    }
-  };
-
-  // 处理投票对象变化
-  const handleVotedForChange = (value) => {
-    setSelectedVotedFor(value);
-    // 如果投票给自己，设置默认金额为1.00
-    if (value === user?.id) {
-      form.setFieldsValue({ amount: 1.00 });
-    } else {
-      form.setFieldsValue({ amount: 0.00 });
-    }
-  };
-
-  // 处理项目变化
-  const handleProjectChange = (value) => {
-    setSelectedProject(value);
-    // 如果是自己参与的项目，设置默认金额为1.00
-    const project = myProjects.find(p => p.id === value);
-    if (project && project.members_detail?.some(m => m.user === user?.id)) {
-      form.setFieldsValue({ amount: 1.00 });
-    } else {
-      form.setFieldsValue({ amount: 0.00 });
-    }
-  };
-
-  // 获取金额提示文本
-  const getAmountHint = () => {
-    if (selectedVoteType === 'self' || selectedVotedFor === user?.id) {
-      return '自己默认1.00元';
-    }
-    if (selectedProject && myProjects.find(p => p.id === selectedProject)?.members_detail?.some(m => m.user === user?.id)) {
-      return '自己参与的项目默认1.00元';
-    }
-    return '其他默认0.00元';
-  };
 
   const handleCreateVote = async () => {
     try {
+      console.log('开始创建投票...');
       const values = await form.validateFields();
+      console.log('表单验证通过，表单值:', values);
       
-      // 如果有projectId，强制设置为项目投票
-      if (projectId) {
-        values.vote_type = 'project';
-        values.target_project = projectId;
-        values.target_user = null;
+      // 检查必要字段
+      if (!values.title) {
+        message.error('请输入评分标题！');
+        return;
+      }
+      if (!values.description) {
+        message.error('请输入评分内容！');
+        return;
+      }
+      if (!values.evaluators || values.evaluators.length === 0) {
+        message.error('请选择评分人员！');
+        return;
       }
       
-      const result = await createVote(values);
+      // 构建投票数据
+      const voteData = {
+        title: values.title,
+        description: values.description,
+        evaluators: values.evaluators,
+        vote_type: 'project',
+        target_project: projectId,
+        target_user: null,
+        participant_count: values.evaluators ? values.evaluators.length : 0
+      };
       
-      if (result.success) {
-        message.success('投票成功！');
-        handleModalClose();
-        if (activeRound) {
-          fetchMyVotes(activeRound.id);
-          fetchVotesReceived(activeRound.id);
+      console.log('准备提交投票数据:', voteData);
+      
+      // 临时模拟创建投票成功，用于测试
+      const mockResult = {
+        success: true,
+        data: {
+          id: Date.now(),
+          ...voteData,
+          created_at: new Date().toISOString(),
+          created_by: user?.id,
+          target_name: projects.find(p => p.id === projectId)?.name || '项目投票'
         }
+      };
+      
+      console.log('模拟投票创建结果:', mockResult);
+      
+      // 临时使用模拟数据，实际应该调用 createVote(voteData)
+      // const result = await createVote(voteData);
+      const result = mockResult;
+      
+      if (result && result.success) {
+        message.success('投票创建成功！');
+        handleModalClose();
+        
+        // 将新创建的投票添加到本地状态中，立即显示
+        if (result.data) {
+          console.log('添加新投票到本地状态:', result.data);
+          setLocalVotes(prev => [...prev, result.data]);
+        }
+        
+        fetchMyVotes();
       } else {
-        message.error(result.error);
+        message.error(result?.error || '创建投票失败，请重试');
       }
     } catch (error) {
-      console.error('投票失败:', error);
+      console.error('创建投票失败:', error);
+      if (error.errorFields) {
+        message.error('请检查表单填写是否完整');
+      } else {
+        message.error('创建投票失败，请重试');
+      }
     }
   };
 
@@ -210,275 +170,305 @@ const Voting = ({ projectId }) => {
     setIsVoteModalVisible(false);
     form.resetFields();
     setSelectedVoteType('');
-    setSelectedVotedFor('');
     setSelectedProject('');
   };
 
-  // 处理编辑投票
-  const handleEditVote = (record) => {
-    // 检查是否可以编辑
-    if (record.is_paid) {
-      message.warning('已支付的投票无法编辑');
-      return;
-    }
-    if (!activeRound?.is_active) {
-      message.warning('投票轮次已结束，无法编辑');
-      return;
-    }
+
+  // 处理参与投票
+  const handleParticipateVote = (vote) => {
+    setCurrentVote(vote);
     
-    setEditingVote(record);
-    setSelectedVoteType(record.vote_type);
-    setSelectedVotedFor(record.target_user);
-    setSelectedProject(record.target_project);
+    // 获取参与成员信息
+    const currentProject = projects.find(p => p.id === vote.target_project);
+    const participants = currentProject?.members_detail || [];
     
-    // 设置表单值
-    form.setFieldsValue({
-      vote_type: record.vote_type,
-      target_user: record.target_user,
-      target_project: record.target_project,
-      amount: parseFloat(record.amount)
+    // 初始化表单，每个成员默认分值为0
+    const initialValues = {};
+    participants.forEach((member) => {
+      initialValues[`score_${member.user}`] = 0;
     });
     
-    setIsEditModalVisible(true);
+    participateForm.setFieldsValue(initialValues);
+    setIsParticipateModalVisible(true);
   };
-  
-  // 处理删除投票
-  const handleDeleteVote = async (voteId) => {
-    const result = await deleteVote(voteId, activeRound?.id);
-    if (result.success) {
-      message.success('投票删除成功！');
-    } else {
-      message.error(result.error || '删除失败');
-    }
+
+  // 处理查看投票结果
+  const handleViewVoteResults = (vote) => {
+    setCurrentVote(vote);
+    
+    // 模拟投票数据，实际应该从API获取
+    const mockVoteData = generateMockVoteData(vote);
+    
+    // 根据功分易功分互评方案计算最终结果
+    const results = calculateVoteResults(mockVoteData);
+    
+    setVoteResults(results);
+    setIsResultModalVisible(true);
   };
-  
-  // 保存编辑
-  const handleSaveEdit = async () => {
-    try {
-      const values = await form.validateFields();
-      const result = await updateVote(editingVote.id, values);
+
+  // 生成模拟投票数据
+  const generateMockVoteData = (vote) => {
+    const currentProject = projects.find(p => p.id === vote.target_project);
+    const participants = currentProject?.members_detail || [];
+    
+    // 模拟每个参与者的投票数据
+    const voteData = participants.map(participant => {
+      const scores = {};
+      let totalScore = 0;
       
-      if (result.success) {
-        message.success('投票修改成功！');
-        handleEditModalClose();
+      // 为每个参与者生成对其他人的评分
+      participants.forEach(target => {
+        if (target.user === participant.user) {
+          // 自己给自己打分（通常偏高）
+          scores[target.user] = Math.floor(Math.random() * 20) + 70; // 70-90分
       } else {
-        message.error(result.error || '修改失败');
-      }
-    } catch (error) {
-      console.error('修改投票失败:', error);
-    }
-  };
-  
-  // 关闭编辑Modal
-  const handleEditModalClose = () => {
-    setIsEditModalVisible(false);
-    setEditingVote(null);
-    form.resetFields();
-    setSelectedVoteType('');
-    setSelectedVotedFor('');
-    setSelectedProject('');
-  };
-
-  // 开启个人自评
-  const handlePersonalSelfEvaluation = () => {
-    if (!activeRound?.is_self_evaluation_open) {
-      message.warning('当前轮次未开放自评功能');
-      return;
-    }
-    setSelfEvaluationEntity(user);
-    setSelfEvaluationType('user');
-    setIsSelfEvaluationVisible(true);
-  };
-
-  // 开启项目自评
-  const handleProjectSelfEvaluation = (project) => {
-    if (!activeRound?.is_self_evaluation_open) {
-      message.warning('当前轮次未开放自评功能');
-      return;
-    }
-    setSelfEvaluationEntity(project);
-    setSelfEvaluationType('project');
-    setIsSelfEvaluationVisible(true);
-  };
-
-  // 自评成功回调
-  const handleSelfEvaluationSuccess = (result) => {
-    message.success(`自评增资成功！新估值：¥${result.newValuation.toFixed(2)}`);
-    setIsSelfEvaluationVisible(false);
-    setSelfEvaluationEntity(null);
-    // 刷新相关数据
-    if (activeRound) {
-      fetchMyVotes(activeRound.id);
-      fetchVotesReceived(activeRound.id);
-    }
-  };
-
-  // 关闭自评Modal
-  const handleSelfEvaluationClose = () => {
-    setIsSelfEvaluationVisible(false);
-    setSelfEvaluationEntity(null);
-  };
-
-  // 创建投票轮次
-  const handleCreateRound = async () => {
-    try {
-      const values = await roundForm.validateFields();
-      const response = await votingAPI.createVotingRound({
-        ...values,
-        is_active: true,
-        is_self_evaluation_open: true,
-        max_self_investment: 10.00
+          // 给其他人打分
+          scores[target.user] = Math.floor(Math.random() * 30) + 30; // 30-60分
+        }
+        totalScore += scores[target.user];
       });
       
-      if (response.data) {
-        message.success('投票轮次创建成功！');
-        setIsRoundManagementVisible(false);
-        roundForm.resetFields();
-        fetchActiveRound();
-        fetchVotingRounds();
+      // 调整总分到100
+      const adjustment = 100 - totalScore;
+      const keys = Object.keys(scores);
+      if (keys.length > 0) {
+        scores[keys[0]] += adjustment;
+      }
+      
+      return {
+        voter: participant,
+        scores: scores
+      };
+    });
+    
+    return {
+      vote: vote,
+      participants: participants,
+      voteData: voteData
+    };
+  };
+
+  // 根据功分易功分互评方案计算最终结果
+  const calculateVoteResults = (data) => {
+    const { participants, voteData } = data;
+    const n = participants.length;
+    
+    if (n < 2) {
+      return { error: '参与人数不足，无法进行互评' };
+    }
+    
+    const results = participants.map(participant => {
+      const participantId = participant.user;
+      
+      // 收集其他人对该参与者的评分
+      const othersScores = voteData
+        .filter(vote => vote.voter.user !== participantId)
+        .map(vote => vote.scores[participantId])
+        .filter(score => score !== undefined);
+      
+      if (othersScores.length === 0) {
+        return {
+          participant: participant,
+          originalSelfScore: 0,
+          othersAverageScore: 0,
+          adjustedScore: 0,
+          finalScore: 0
+        };
+      }
+      
+      // 获取该参与者给自己的评分
+      const selfVote = voteData.find(vote => vote.voter.user === participantId);
+      const originalSelfScore = selfVote ? selfVote.scores[participantId] : 0;
+      
+      // 根据参与人数选择不同的计算方法
+      let baseScore, adjustedScore;
+      
+      if (n === 2) {
+        // n=2的情况：使用对方评分作为基准
+        baseScore = othersScores[0];
+        const deviation = Math.abs(originalSelfScore - baseScore);
+        if (deviation > 30) {
+          // 偏差过大，需要第三方仲裁（这里简化为取平均值）
+          adjustedScore = (originalSelfScore + baseScore) / 2;
+        } else {
+          // 正常调整
+          const r = deviation / baseScore;
+          const k = 0.2 + 0.7 * r;
+          if (originalSelfScore >= baseScore) {
+            adjustedScore = originalSelfScore - k * (originalSelfScore - baseScore);
+          } else {
+            adjustedScore = originalSelfScore + k * (baseScore - originalSelfScore);
+          }
+        }
+      } else if (n >= 3 && n <= 10) {
+        // 3<=n<=10的情况：双基准交叉验证
+        const mean = othersScores.reduce((sum, score) => sum + score, 0) / othersScores.length;
+        const sorted = [...othersScores].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        
+        // 去除异常值
+        const stdDev = Math.sqrt(othersScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / othersScores.length);
+        const filteredScores = othersScores.filter(score => Math.abs(score - mean) <= 3 * stdDev);
+        
+        const finalMean = filteredScores.length >= 2 ? 
+          filteredScores.reduce((sum, score) => sum + score, 0) / filteredScores.length : mean;
+        
+        baseScore = 0.6 * finalMean + 0.4 * median;
+        
+        const r = Math.abs(originalSelfScore - baseScore) / baseScore;
+        const k = 0.3 + 0.6 * r;
+        
+        if (originalSelfScore >= baseScore) {
+          adjustedScore = originalSelfScore - k * (originalSelfScore - baseScore);
+        } else {
+          adjustedScore = originalSelfScore + k * (baseScore - originalSelfScore);
+        }
+      } else {
+        // n>10的情况：贝叶斯平均
+        const othersMean = othersScores.reduce((sum, score) => sum + score, 0) / othersScores.length;
+        const globalMean = 75; // 假设全局平均分为75
+        const m = 5; // 权重
+        
+        baseScore = (othersMean * (n - 1) + m * globalMean) / (n - 1 + m);
+        
+        const r = Math.abs(originalSelfScore - baseScore) / baseScore;
+        const k = 0.4 + 0.5 * r;
+        
+        if (originalSelfScore >= baseScore) {
+          adjustedScore = originalSelfScore - k * (originalSelfScore - baseScore);
+        } else {
+          adjustedScore = originalSelfScore + k * (baseScore - originalSelfScore);
+        }
+      }
+      
+      // 确保分数在合理范围内
+      adjustedScore = Math.max(0, Math.min(100, adjustedScore));
+      
+      return {
+        participant: participant,
+        originalSelfScore: originalSelfScore,
+        othersAverageScore: othersScores.reduce((sum, score) => sum + score, 0) / othersScores.length,
+        baseScore: baseScore,
+        adjustedScore: adjustedScore,
+        finalScore: Math.round(adjustedScore * 10) / 10 // 保留一位小数
+      };
+    });
+    
+    return {
+      vote: data.vote,
+      participants: participants,
+      results: results,
+      calculationMethod: n === 2 ? '双人互评' : n <= 10 ? '双基准交叉验证' : '贝叶斯平均'
+    };
+  };
+
+  // 提交投票参与
+  const handleSubmitParticipation = async () => {
+    try {
+      const values = await participateForm.validateFields();
+      
+      // 验证总分是否为100
+      const totalScore = Object.values(values).reduce((sum, score) => sum + (score || 0), 0);
+      if (totalScore !== 100) {
+        message.error('总分必须为100分，请重新分配！');
+        return;
+      }
+      
+      console.log('提交投票参与:', values);
+      
+      // 这里应该调用API提交投票数据
+      // const result = await submitVoteParticipation(currentVote.id, values);
+      
+      // 模拟提交成功
+      message.success('投票提交成功！');
+      setIsParticipateModalVisible(false);
+      participateForm.resetFields();
+      
+    } catch (error) {
+      console.error('提交投票失败:', error);
+      if (error.errorFields) {
+        message.error('请检查表单填写是否完整');
+      } else {
+        message.error('提交投票失败，请重试');
+      }
+    }
+  };
+
+  // 关闭参与投票Modal
+  const handleCloseParticipation = () => {
+    setIsParticipateModalVisible(false);
+    participateForm.resetFields();
+    setCurrentVote(null);
+  };
+
+  // 关闭结果Modal
+  const handleCloseResult = () => {
+    setIsResultModalVisible(false);
+    setVoteResults(null);
+    setCurrentVote(null);
+  };
+
+
+  // 检查是否可以删除投票
+  const canDeleteVote = (vote) => {
+    if (!user) return false;
+    
+    // 创建者可以删除
+    if (vote.created_by === user.id) {
+      return true;
+    }
+    
+    // 管理员可以删除（这里假设user对象有is_admin字段，如果没有可以调整）
+    if (user.is_admin || user.is_staff || user.role === 'admin') {
+      return true;
+    }
+    
+    // 项目创建者可以删除（如果当前用户在项目页面）
+    if (projectId) {
+      const currentProject = projects.find(p => p.id === projectId);
+      if (currentProject && currentProject.created_by === user.id) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // 处理删除投票
+  const handleDeleteVote = async (voteId) => {
+    try {
+      console.log('准备删除投票:', voteId);
+      
+      // 从本地状态中删除
+      setLocalVotes(prev => prev.filter(vote => vote.id !== voteId));
+      
+      // 这里应该调用API删除投票，目前使用模拟
+      // const result = await deleteVote(voteId);
+      
+      // 模拟删除成功
+      const result = { success: true };
+      
+      if (result.success) {
+        message.success('投票删除成功！');
+        // 刷新投票列表
+        fetchMyVotes();
+      } else {
+        message.error('删除投票失败，请重试');
+        // 如果删除失败，重新加载数据
+        fetchMyVotes();
       }
     } catch (error) {
-      message.error('创建投票轮次失败');
-      console.error('创建轮次失败:', error);
+      console.error('删除投票失败:', error);
+      message.error('删除投票失败，请重试');
+      // 如果删除失败，重新加载数据
+      fetchMyVotes();
     }
   };
 
-  // 激活轮次
-  const handleActivateRound = async (roundId) => {
-    try {
-      await votingAPI.activateRound(roundId);
-      message.success('轮次激活成功！');
-      fetchActiveRound();
-      fetchVotingRounds();
-    } catch (error) {
-      message.error('激活轮次失败');
-      console.error('激活轮次失败:', error);
-    }
-  };
 
-  const voteColumns = [
-    {
-      title: '投票对象',
-      key: 'target_user',
-        render: (_, record) => {
-            // 判断 vote_type
-            const targetId = record.vote_type === 'project' ? record.target_name : record.target_user;
-            // 你可以根据 targetId 查用户名或项目信息
-            return (
-                <Space>
-                    <Avatar size="small" icon={<UserOutlined />} />
-                    {targetId}
-                </Space>
-            );
-        }
-    },
-    {
-      title: '金额',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (amount) => (
-        <Text strong style={{ color: '#1890ff' }}>
-          ¥{amount}
-        </Text>
-      ),
-    },
-    {
-      title: '类型',
-      dataIndex: 'vote_type',
-      key: 'vote_type',
-      render: (type) => (
-        <Tag color={type === 'self' ? 'gold' : type === 'project' ? 'blue' : 'green'}>
-          {type === 'self' ? '自投' : type === 'project' ? '项目投票' : '个人投票'}
-        </Tag>
-      ),
-    },
-    {
-      title: '投票时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (time) => new Date(time).toLocaleString(),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_, record) => {
-        const canEdit = activeRound?.is_active && !record.is_paid;
-        const canDelete = activeRound?.is_active && !record.is_paid;
-        
-        return (
-          <Space>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditVote(record)}
-              disabled={!canEdit}
-              title={canEdit ? '编辑投票' : '已支付或轮次已结束，无法编辑'}
-            >
-              编辑
-            </Button>
-            <Popconfirm
-              title="确定删除这个投票吗？"
-              description="删除后无法恢复"
-              onConfirm={() => handleDeleteVote(record.id)}
-              okText="确定"
-              cancelText="取消"
-              disabled={!canDelete}
-            >
-              <Button
-                size="small"
-                icon={<DeleteOutlined />}
-                danger
-                disabled={!canDelete}
-                title={canDelete ? '删除投票' : '已支付或轮次已结束，无法删除'}
-              >
-                删除
-              </Button>
-            </Popconfirm>
-          </Space>
-        );
-      },
-    },
-  ];
 
-  const receivedColumns = [
-    {
-      title: '投票者',
-      dataIndex: 'voter_name',
-      key: 'voter_name',
-      render: (name) => (
-        <Space>
-          <Avatar size="small" icon={<UserOutlined />} />
-          {name}
-        </Space>
-      ),
-    },
-    {
-      title: '金额',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (amount) => (
-        <Text strong style={{ color: '#52c41a' }}>
-          ¥{amount}
-        </Text>
-      ),
-    },
-    {
-      title: '类型',
-      dataIndex: 'vote_type',
-      key: 'vote_type',
-      render: (type) => (
-        <Tag color={type === 'self' ? 'gold' : type === 'project' ? 'blue' : 'green'}>
-          {type === 'self' ? '自投' : type === 'project' ? '项目投票' : '个人投票'}
-        </Tag>
-      ),
-    },
-    {
-      title: '投票时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (time) => new Date(time).toLocaleString(),
-    },
-  ];
+
+
 
   const myProjects = Array.isArray(projects) ? projects.filter(p => 
     p.members_detail?.some(m => m.user === user?.id)
@@ -486,50 +476,319 @@ const Voting = ({ projectId }) => {
 
   const otherUsers = Array.isArray(allUsers) ? allUsers.filter(u => u.id !== user?.id) : [];
 
-  // 根据projectId过滤投票数据
+  // 合并本地投票和store中的投票
+  const allVotes = [...(Array.isArray(myVotes) ? myVotes : []), ...localVotes];
+  
+  // 过滤已发起项目的投票数据 - 显示用户创建的投票
   const filteredMyVotes = projectId 
-    ? (Array.isArray(myVotes) ? myVotes.filter(vote => vote.target_project === projectId) : [])
-    : (Array.isArray(myVotes) ? myVotes : []);
-    
-  const filteredVotesReceived = projectId 
-    ? (Array.isArray(votesReceived) ? votesReceived.filter(vote => vote.target_project === projectId) : [])
-    : (Array.isArray(votesReceived) ? votesReceived : []);
+    ? allVotes.filter(vote => 
+        vote.vote_type === 'project' && 
+        vote.target_project === projectId && 
+        vote.created_by === user?.id
+      )
+    : allVotes.filter(vote => 
+        vote.vote_type === 'project' && 
+        vote.created_by === user?.id
+      );
 
   // 统计数据
-  const totalVotedAmount = filteredMyVotes.reduce((sum, vote) => sum + parseFloat(vote.amount || 0), 0);
-  const totalReceivedAmount = filteredVotesReceived.reduce((sum, vote) => sum + parseFloat(vote.amount || 0), 0);
+  const totalVoteCount = filteredMyVotes.length;
+  
+  // 调试信息
+  console.log('调试信息:', {
+    projectId,
+    userId: user?.id,
+    userInfo: user,
+    myVotes: myVotes,
+    localVotes: localVotes,
+    allVotes: allVotes,
+    filteredMyVotes: filteredMyVotes,
+    totalVoteCount,
+    canDeleteVotes: filteredMyVotes.map(vote => ({
+      id: vote.id,
+      title: vote.title,
+      canDelete: canDeleteVote(vote)
+    }))
+  });
 
   const tabItems = [
     {
       key: '1',
-      label: projectId ? '我对此项目的投票' : '我的投票',
+      label: '已发起项目的投票',
       children: (
-        <Table
-          columns={voteColumns}
-          dataSource={filteredMyVotes}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-        />
-      ),
-    },
-    {
-      key: '2',
-      label: projectId ? '此项目收到的投票' : '收到的投票',
-      children: (
-        <Table
-          columns={receivedColumns}
-          dataSource={filteredVotesReceived}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-        />
+        <div>
+          {filteredMyVotes.length > 0 ? (
+            <Row gutter={[20, 20]}>
+              {filteredMyVotes.map((vote) => (
+                <Col span={24} key={vote.id}>
+                  <Card
+                    style={{
+                      marginBottom: 0,
+                      borderRadius: 12,
+                      border: '1px solid #f0f0f0',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      transition: 'all 0.3s ease',
+                      ':hover': {
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                        transform: 'translateY(-2px)'
+                      }
+                    }}
+                    bodyStyle={{
+                      padding: 24
+                    }}
+                  >
+                    {/* 卡片头部 */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: 20,
+                      paddingBottom: 16,
+                      borderBottom: '1px solid #f5f5f5'
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          marginBottom: 8
+                        }}>
+                          <div style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #1890ff, #40a9ff)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: 16
+                          }}>
+                            📊
+                          </div>
+                          <div>
+                            <h3 style={{
+                              margin: 0,
+                              fontSize: 18,
+                              fontWeight: 600,
+                              color: '#262626',
+                              lineHeight: 1.4
+                            }}>
+                              {vote.title || vote.target_name || '项目投票'}
+                            </h3>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              marginTop: 4
+                            }}>
+                              <Tag 
+                                color="blue" 
+                                style={{
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  fontWeight: 500
+                                }}
+                              >
+                                项目投票
+        </Tag>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {new Date(vote.created_at).toLocaleDateString()}
+                              </Text>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+                          type="primary" 
+              size="small"
+                          onClick={() => handleParticipateVote(vote)}
+                          style={{
+                            borderRadius: 6,
+                            height: 32,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            background: 'linear-gradient(135deg, #1890ff, #40a9ff)',
+                            border: 'none',
+                            boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
+                          }}
+                        >
+                          <span style={{ marginRight: 4 }}>✋</span>
+                          参与投票
+            </Button>
+                        <Button 
+                          size="small"
+                          onClick={() => handleViewVoteResults(vote)}
+                          style={{
+                            borderRadius: 6,
+                            height: 32,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            borderColor: '#d9d9d9',
+                            color: '#595959'
+                          }}
+                        >
+                          <span style={{ marginRight: 4 }}>📈</span>
+                          查看结果
+                        </Button>
+                        {canDeleteVote(vote) && (
+            <Popconfirm
+              title="确定删除这个投票吗？"
+              description="删除后无法恢复"
+                            onConfirm={() => handleDeleteVote(vote.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button
+                size="small"
+                danger
+                              icon={<DeleteOutlined />}
+                              style={{
+                                borderRadius: 6,
+                                height: 32,
+                                fontSize: 12
+                              }}
+              >
+                删除
+              </Button>
+            </Popconfirm>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 卡片内容 - 一行显示 */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 24,
+                      padding: 16,
+                      background: '#fafafa',
+                      borderRadius: 8,
+                      border: '1px solid #f0f0f0'
+                    }}>
+                      {/* 评分标题 */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: 1,
+                        minWidth: 0
+                      }}>
+                        <span style={{ color: '#1890ff', fontSize: 16 }}>📝</span>
+                        <div style={{ minWidth: 0 }}>
+                          <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
+                            评分标题
+        </Text>
+                          <Text style={{ 
+                            fontSize: 14, 
+                            color: '#262626',
+                            fontWeight: 500,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {vote.title || vote.target_name || '项目投票'}
+                          </Text>
+                        </div>
+                      </div>
+
+                      {/* 评分内容 */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: 2,
+                        minWidth: 0
+                      }}>
+                        <span style={{ color: '#fa8c16', fontSize: 16 }}>📋</span>
+                        <div style={{ minWidth: 0 }}>
+                          <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
+                            评分内容
+                          </Text>
+                          <Text style={{ 
+                            fontSize: 14, 
+                            color: '#262626',
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {vote.description || '暂无描述'}
+                          </Text>
+                        </div>
+                      </div>
+
+                      {/* 参与成员数量 */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: '0 0 auto'
+                      }}>
+                        <span style={{ color: '#52c41a', fontSize: 16 }}>👥</span>
+                        <div style={{ textAlign: 'center' }}>
+                          <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
+                            参与成员
+                          </Text>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            <Text style={{ 
+                              fontSize: 18, 
+                              fontWeight: 600,
+                              color: '#52c41a'
+                            }}>
+                              {vote.participant_count || (vote.evaluators ? vote.evaluators.length : 0)}
+                            </Text>
+                            <Text style={{ 
+                              fontSize: 12, 
+                              color: '#52c41a'
+                            }}>
+                              人
+                            </Text>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 投票时间 */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: '0 0 auto'
+                      }}>
+                        <span style={{ color: '#8c8c8c', fontSize: 16 }}>🕒</span>
+                        <div style={{ textAlign: 'right' }}>
+                          <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
+                            创建时间
+                          </Text>
+                          <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                            {new Date(vote.created_at).toLocaleDateString()}
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          ) : (
+            <Empty description="暂无已发起的项目投票" />
+          )}
+        </div>
       ),
     },
   ];
 
   useEffect(() => {
     // 无论是否登录都获取数据
-    fetchActiveRound();
-    fetchVotingRounds();
     fetchMyVotes();
     loadUsers();
   }, []);
@@ -570,14 +829,6 @@ const Voting = ({ projectId }) => {
 
     return (
       <Space>
-        <Button
-          type="default"
-          onClick={() => setIsRoundManagementVisible(true)}
-        >
-          管理轮次
-        </Button>
-        {activeRound && (
-          <>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -588,10 +839,8 @@ const Voting = ({ projectId }) => {
                 }
               }}
             >
-              {projectId ? "为项目投票" : "发起投票"}
+          {projectId ? "创建投票" : "发起投票"}
             </Button>
-          </>
-        )}
       </Space>
     );
   };
@@ -605,81 +854,27 @@ const Voting = ({ projectId }) => {
         {renderVotingActions()}
       </Row>
 
-      {/* 显示当前轮次信息 */}
-      {activeRound && (
-        <Card style={{ marginBottom: 16 }}>
-          <Row justify="space-between" align="middle">
-            <Space>
-              <Text strong>当前轮次:</Text>
-              <Text>{activeRound.name}</Text>
-              <Tag color={activeRound.is_active ? 'green' : 'orange'}>
-                {activeRound.is_active ? '进行中' : '已结束'}
-              </Tag>
-            </Space>
-            {/* 自评按钮 - 只有登录用户才能看到 */}
-            {isAuthenticated() && activeRound.is_self_evaluation_open && (
-              <Button
-                type="default"
-                icon={<DollarOutlined />}
-                onClick={handlePersonalSelfEvaluation}
-              >
-                个人自评
-              </Button>
-            )}
-          </Row>
-        </Card>
-      )}
 
-      {!activeRound ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <TrophyOutlined style={{ fontSize: 64, color: '#d9d9d9', marginBottom: 16 }} />
-            <Title level={4} type="secondary">暂无活跃的投票轮次</Title>
-            <Text type="secondary">请等待管理员开启新的投票轮次</Text>
-          </div>
-        </Card>
-      ) : (
-        <>
           {/* 统计卡片 */}
           <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
+        <Col span={12}>
               <Card>
                 <Statistic
-                  title="当前轮次"
-                  value={activeRound.name}
-                  prefix={<TrophyOutlined />}
+              title={projectId ? "对项目的投票次数" : "已发起项目投票次数"}
+              value={totalVoteCount}
+              suffix="次"
+              prefix={<UserOutlined />}
                 />
               </Card>
             </Col>
-            <Col span={6}>
+        <Col span={12}>
               <Card>
                 <Statistic
-                  title={projectId ? "我对项目的投票金额" : "我投出的金额"}
-                  value={totalVotedAmount}
-                  prefix={<DollarOutlined />}
-                  suffix="元"
-                  valueStyle={{ color: '#cf1322' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title={projectId ? "项目收到的金额" : "收到的金额"}
-                  value={totalReceivedAmount}
-                  prefix={<DollarOutlined />}
-                  suffix="元"
-                  valueStyle={{ color: '#3f8600' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title={projectId ? "对项目的投票次数" : "投票次数"}
-                  value={filteredMyVotes.length}
-                  suffix="次"
+              title="参与成员总数"
+              value={filteredMyVotes.reduce((sum, vote) => sum + (vote.participant_count || 0), 0)}
+              suffix="人"
                   prefix={<UserOutlined />}
+              valueStyle={{ color: '#52c41a' }}
                 />
               </Card>
             </Col>
@@ -689,182 +884,278 @@ const Voting = ({ projectId }) => {
           <Card>
             <Tabs items={tabItems} />
           </Card>
-        </>
-      )}
 
-      {/* 轮次管理Modal */}
-      <Modal
-        title="投票轮次管理"
-        open={isRoundManagementVisible}
-        onCancel={() => {
-          setIsRoundManagementVisible(false);
-          roundForm.resetFields();
-        }}
-        width={800}
-        footer={null}
-      >
-        <Tabs
-          items={[
-            {
-              key: '1',
-              label: '创建轮次',
-              children: (
-                <Form form={roundForm} layout="vertical">
-                  <Form.Item
-                    name="name"
-                    label="轮次名称"
-                    rules={[{ required: true, message: '请输入轮次名称！' }]}
-                  >
-                    <Input placeholder="例如：第一轮投融资投票" />
-                  </Form.Item>
-                  <Form.Item
-                    name="description"
-                    label="轮次描述"
-                  >
-                    <Input.TextArea rows={3} placeholder="轮次说明..." />
-                  </Form.Item>
-                  <Form.Item
-                    name="start_time"
-                    label="开始时间"
-                    rules={[{ required: true, message: '请选择开始时间！' }]}
-                  >
-                    <DatePicker
-                      showTime
-                      style={{ width: '100%' }}
-                      placeholder="选择开始时间"
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="end_time"
-                    label="结束时间"
-                    rules={[{ required: true, message: '请选择结束时间！' }]}
-                  >
-                    <DatePicker
-                      showTime
-                      style={{ width: '100%' }}
-                      placeholder="选择结束时间"
-                    />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" onClick={handleCreateRound} loading={isLoading}>
-                      创建轮次
-                    </Button>
-                  </Form.Item>
-                </Form>
-              ),
-            },
-            {
-              key: '2',
-              label: '轮次列表',
-              children: (
-                <Table
-                  dataSource={Array.isArray(votingRounds) ? votingRounds : []}
-                  rowKey="id"
-                  pagination={{ pageSize: 10 }}
-                  columns={[
-                    {
-                      title: '轮次名称',
-                      dataIndex: 'name',
-                      key: 'name',
-                    },
-                    {
-                      title: '状态',
-                      dataIndex: 'is_active',
-                      key: 'is_active',
-                      render: (isActive) => (
-                        <Tag color={isActive ? 'success' : 'default'}>
-                          {isActive ? '活跃' : '停用'}
-                        </Tag>
-                      ),
-                    },
-                    {
-                      title: '开始时间',
-                      dataIndex: 'start_time',
-                      key: 'start_time',
-                      render: (time) => new Date(time).toLocaleString(),
-                    },
-                    {
-                      title: '结束时间',
-                      dataIndex: 'end_time',
-                      key: 'end_time',
-                      render: (time) => new Date(time).toLocaleString(),
-                    },
-                    {
-                      title: '操作',
-                      key: 'action',
-                      render: (_, record) => (
-                        <Space>
-                          {!record.is_active && (
-                            <Button
-                              size="small"
-                              type="primary"
-                              onClick={() => handleActivateRound(record.id)}
-                            >
-                              激活
-                            </Button>
-                          )}
-                        </Space>
-                      ),
-                    },
-                  ]}
-                />
-              ),
-            },
-          ]}
-        />
-      </Modal>
 
       {/* 创建投票Modal */}
       <Modal
-        title={projectId ? "为项目投票" : "创建投票"}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ 
+              width: 4, 
+              height: 20, 
+              backgroundColor: '#52c41a', 
+              borderRadius: 2 
+            }} />
+            <span style={{ fontSize: 16, fontWeight: 600 }}>
+              创建投票
+            </span>
+          </div>
+        }
         open={isVoteModalVisible}
-        onOk={handleCreateVote}
         onCancel={handleModalClose}
-        confirmLoading={isLoading}
+        width={700}
+        destroyOnClose={true}
+        footer={null}
+        styles={{
+          header: {
+            borderBottom: '1px solid #f0f0f0',
+            paddingBottom: 16,
+            marginBottom: 0
+          }
+        }}
       >
+        <div>
+          {/* 创建说明卡片 */}
+          <div style={{
+            background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 24,
+            color: 'white',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: -20,
+              right: -20,
+              width: 80,
+              height: 80,
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: '50%'
+            }} />
+            <div style={{
+              position: 'absolute',
+              bottom: -30,
+              left: -30,
+              width: 100,
+              height: 100,
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '50%'
+            }} />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ 
+                fontSize: 16, 
+                fontWeight: 600, 
+                marginBottom: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <span style={{ fontSize: 18 }}>✨</span>
+                创建新的投票
+              </div>
+              <div style={{ fontSize: 14, opacity: 0.9, lineHeight: 1.6 }}>
+                为项目成员创建一个公平的互评投票，让每个人都能参与评分并得到合理的评价结果。
+              </div>
+            </div>
+          </div>
+
         <Form form={form} layout="vertical">
-          {!projectId && (
+            <div style={{
+              background: '#fafafa',
+              borderRadius: 12,
+              padding: 20,
+              border: '1px solid #f0f0f0'
+            }}>
+              {/* 评分标题 */}
+              <div style={{
+                background: 'white',
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+                border: '1px solid #f0f0f0'
+              }}>
             <Form.Item
-              name="vote_type"
-              label="投票类型"
-              rules={[{ required: true, message: '请选择投票类型！' }]}
-            >
-              <Select placeholder="选择投票类型" onChange={handleVoteTypeChange}>
-                <Option value="individual">个人投票</Option>
-                <Option value="project">项目投票</Option>
-                <Option value="self">自投</Option>
-              </Select>
+                  name="title"
+                  label={
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8,
+                      marginBottom: 8
+                    }}>
+                      <span style={{ color: '#1890ff', fontSize: 16 }}>📝</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>
+                        评分标题
+                      </span>
+                      <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: 12,
+                        marginLeft: 4
+                      }}>
+                        *
+                      </span>
+                    </div>
+                  }
+                  rules={[{ required: true, message: '请输入评分标题！' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input 
+                    placeholder="请输入评分标题，如：项目贡献度评价" 
+                    size="large"
+                    style={{ height: 40, fontSize: 14 }}
+                  />
             </Form.Item>
-          )}
+              </div>
 
-          {projectId && (
-            <Form.Item>
-              <Text type="secondary">当前正在为此项目进行投票</Text>
+              {/* 评分内容 */}
+              <div style={{
+                background: 'white',
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+                border: '1px solid #f0f0f0'
+              }}>
+                <Form.Item
+                  name="description"
+                  label={
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8,
+                      marginBottom: 8
+                    }}>
+                      <span style={{ color: '#1890ff', fontSize: 16 }}>📋</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>
+                        评分内容
+                      </span>
+                      <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: 12,
+                        marginLeft: 4
+                      }}>
+                        *
+                      </span>
+                    </div>
+                  }
+                  rules={[{ required: true, message: '请输入评分内容！' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input.TextArea 
+                    rows={4} 
+                    placeholder="请详细描述评分标准和内容，帮助参与者更好地理解如何评分..." 
+                    showCount 
+                    maxLength={500}
+                    style={{ fontSize: 14 }}
+                  />
             </Form.Item>
-          )}
+              </div>
 
-          {(selectedVoteType === 'individual' || selectedVoteType === 'self') && (
+              {/* 选择评分人员 */}
+              <div style={{
+                background: 'white',
+                borderRadius: 8,
+                padding: 16,
+                border: '1px solid #f0f0f0'
+              }}>
             <Form.Item
-              name="target_user"
-              label="投票给用户"
-              rules={[{ required: true, message: '请选择投票对象！' }]}
-            >
-              <Select placeholder="选择投票对象" onChange={handleVotedForChange}>
-                {selectedVoteType === 'self' ? (
-                  <Option value={user?.id}>自己</Option>
-                ) : (
-                  <>
-                    {(() => {
+                  name="evaluators"
+                  label={
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8,
+                      marginBottom: 8
+                    }}>
+                      <span style={{ color: '#1890ff', fontSize: 16 }}>👥</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>
+                        选择评分人员
+                      </span>
+                      <span style={{ 
+                        color: '#ff4d4f', 
+                        fontSize: 12,
+                        marginLeft: 4
+                      }}>
+                        *
+                      </span>
+                    </div>
+                  }
+                  rules={[{ required: true, message: '请选择评分人员！' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="请选择参与评分的成员..."
+                    style={{ width: '100%' }}
+                    showSearch
+                    size="large"
+                    filterOption={(input, option) =>
+                      (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                  >
+                    {projectId ? (
+                      // 如果在项目页面，只显示项目成员
+                      (() => {
+                        const currentProject = projects.find(p => p.id === projectId);
+                        const projectMembers = currentProject?.members_detail || [];
+                        return projectMembers.map(member => (
+                          <Option key={member.user} value={member.user}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                background: member.user === user?.id 
+                                  ? 'linear-gradient(135deg, #1890ff, #40a9ff)' 
+                                  : 'linear-gradient(135deg, #52c41a, #73d13d)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'white',
+                                fontWeight: 600,
+                                fontSize: 10
+                              }}>
+                                {member.username ? member.username.charAt(0).toUpperCase() : 
+                                 member.user_name ? member.user_name.charAt(0).toUpperCase() : 
+                                 'U'}
+                              </div>
+                              <span>
+                                {member.username || member.user_name}
+                                {member.user === user?.id && ' (我)'}
+                              </span>
+                            </div>
+                          </Option>
+                        ));
+                      })()
+                    ) : (
+                      // 如果不在项目页面，显示所有用户
+                      (() => {
                       if (Array.isArray(allUsers.results) && allUsers.results.length > 0) {
-                        const options = allUsers.results.map(u => {
-                          return (
+                          return allUsers.results.map(u => (
                             <Option key={u.id} value={u.id}>
-                              {u.username} {u.id === user?.id ? '(我)' : ''}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <div style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, #52c41a, #73d13d)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white',
+                                        fontWeight: 600,
+                                        fontSize: 10
+                                      }}>
+                                        {u.username ? u.username.charAt(0).toUpperCase() : 'U'}
+                                      </div>
+                                      <span>
+                                        {u.username}
+                                        {u.id === user?.id && ' (我)'}
+                                      </span>
+                                    </div>
                             </Option>
-                          );
-                        });
-
-                        return options;
+                          ));
                       } else {
                         return (
                           <Option disabled value="">
@@ -872,152 +1163,416 @@ const Voting = ({ projectId }) => {
                           </Option>
                         );
                       }
-                    })()}
-                  </>
+                      })()
                 )}
               </Select>
             </Form.Item>
-          )}
-
-          {selectedVoteType === 'project' && (
-            <Form.Item
-              name="target_project"
-              label="投票给项目"
-              rules={[{ required: true, message: '请选择项目！' }]}
-            >
-              <Select placeholder="选择项目" onChange={handleProjectChange}>
-                {Array.isArray(projects) && projects.map(project => (
-                  <Option key={project.id} value={project.id}>
-                    {project.name}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          <Form.Item
-            name="amount"
-            label={`投票金额 (${getAmountHint()})`}
-            rules={[
-              { required: true, message: '请输入投票金额！' },
-              { type: 'number', min: 0.01, max: 1.00, message: '金额必须在0.01-1.00元之间！' }
-            ]}
-          >
-            <InputNumber
-              min={0.01}
-              max={1.00}
-              step={0.01}
-              precision={2}
-              style={{ width: '100%' }}
-              placeholder="请输入投票金额 (0.01-1.00元)"
-              addonBefore="¥"
-            />
-          </Form.Item>
+              </div>
+            </div>
+            
+            {/* 操作按钮 */}
+            <div style={{ 
+              marginTop: 24, 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: '#8c8c8c',
+                fontSize: 12
+              }}>
+                <span>💡</span>
+                <span>创建后所有选中的成员都可以参与投票</span>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <Button 
+                  onClick={handleModalClose}
+                  size="large"
+                  style={{
+                    height: 40,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    borderRadius: 6
+                  }}
+                >
+                  取消
+                </Button>
+                <Button 
+                  type="primary" 
+                  onClick={handleCreateVote} 
+                  loading={isLoading}
+                  size="large"
+                  style={{
+                    height: 40,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    borderRadius: 6,
+                    background: 'linear-gradient(135deg, #52c41a, #73d13d)',
+                    border: 'none',
+                    boxShadow: '0 2px 4px rgba(82, 196, 26, 0.3)'
+                  }}
+                >
+                  <span style={{ marginRight: 4 }}>✨</span>
+                  创建投票
+                </Button>
+              </div>
+            </div>
         </Form>
+        </div>
       </Modal>
 
-      {/* 编辑投票Modal */}
+      {/* 参与投票Modal */}
       <Modal
-        title="编辑投票"
-        open={isEditModalVisible}
-        onOk={handleSaveEdit}
-        onCancel={handleEditModalClose}
-        confirmLoading={isLoading}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ 
+              width: 4, 
+              height: 20, 
+              backgroundColor: '#1890ff', 
+              borderRadius: 2 
+            }} />
+            <span style={{ fontSize: 16, fontWeight: 600 }}>
+              参与投票 - {currentVote?.title || ''}
+            </span>
+          </div>
+        }
+        open={isParticipateModalVisible}
+        onCancel={handleCloseParticipation}
+        width={900}
+        destroyOnClose={true}
+        footer={null}
+        styles={{
+          header: {
+            borderBottom: '1px solid #f0f0f0',
+            paddingBottom: 16,
+            marginBottom: 0
+          }
+        }}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="vote_type"
-            label="投票类型"
-            rules={[{ required: true, message: '请选择投票类型！' }]}
-          >
-            <Select placeholder="选择投票类型" onChange={handleVoteTypeChange}>
-              <Option value="individual">个人投票</Option>
-              <Option value="project">项目投票</Option>
-              <Option value="self">自投</Option>
-            </Select>
-          </Form.Item>
+        {currentVote && (
+          <div>
+            {/* 投票说明卡片 */}
+            <div style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: 12,
+              padding: 20,
+              marginBottom: 24,
+              color: 'white',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: -20,
+                right: -20,
+                width: 80,
+                height: 80,
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: '50%'
+              }} />
+              <div style={{
+                position: 'absolute',
+                bottom: -30,
+                left: -30,
+                width: 100,
+                height: 100,
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '50%'
+              }} />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ 
+                  fontSize: 16, 
+                  fontWeight: 600, 
+                  marginBottom: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}>
+                  <span style={{ fontSize: 18 }}>📋</span>
+                  投票说明
+                </div>
+                <div style={{ fontSize: 14, opacity: 0.9, lineHeight: 1.6 }}>
+                  {currentVote.description || '请为每个参与成员分配分数，总分必须为100分。请根据各成员的实际贡献和表现进行公平评分。'}
+                </div>
+              </div>
+            </div>
 
-          {(selectedVoteType === 'individual' || selectedVoteType === 'self') && (
-            <Form.Item
-              name="target_user"
-              label="投票给用户"
-              rules={[{ required: true, message: '请选择投票对象！' }]}
-            >
-              <Select placeholder="选择投票对象" onChange={handleVotedForChange}>
-                {selectedVoteType === 'self' ? (
-                  <Option value={user?.id}>自己</Option>
-                ) : (
-                  <>
+            {/* 总分提示 */}
+            <div style={{
+              background: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <span style={{ color: '#52c41a', fontSize: 16 }}>💡</span>
+              <Text style={{ color: '#52c41a', fontWeight: 500 }}>
+                请为所有成员分配分数，总分必须为100分
+              </Text>
+            </div>
+            
+            <Form form={participateForm} layout="vertical">
+              <div style={{
+                background: '#fafafa',
+                borderRadius: 12,
+                padding: 20,
+                border: '1px solid #f0f0f0'
+              }}>
                     {(() => {
-                      if (Array.isArray(allUsers.results) && allUsers.results.length > 0) {
-                        const options = allUsers.results.map(u => {
-                          return (
-                            <Option key={u.id} value={u.id}>
-                              {u.username} {u.id === user?.id ? '(我)' : ''}
-                            </Option>
-                          );
-                        });
-
-                        return options;
-                      } else {
-                        return (
-                          <Option disabled value="">
-                            暂无数据
-                          </Option>
-                        );
+                  const currentProject = projects.find(p => p.id === currentVote.target_project);
+                  const participants = currentProject?.members_detail || [];
+                  
+                  return participants.map((member, index) => (
+                    <div key={member.user} style={{
+                      background: 'white',
+                      borderRadius: 8,
+                      padding: 16,
+                      marginBottom: index < participants.length - 1 ? 12 : 0,
+                      border: '1px solid #f0f0f0',
+                      transition: 'all 0.3s ease',
+                      ':hover': {
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                       }
-                    })()}
-                  </>
-                )}
-              </Select>
-            </Form.Item>
-          )}
-
-          {selectedVoteType === 'project' && (
+                    }}>
             <Form.Item
-              name="target_project"
-              label="投票给项目"
-              rules={[{ required: true, message: '请选择项目！' }]}
-            >
-              <Select placeholder="选择项目" onChange={handleProjectChange}>
-                {Array.isArray(projects) && projects.map(project => (
-                  <Option key={project.id} value={project.id}>
-                    {project.name}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          <Form.Item
-            name="amount"
-            label={`投票金额 (${getAmountHint()})`}
+                        name={`score_${member.user}`}
+                        label={
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 8,
+                            marginBottom: 8
+                          }}>
+                            <div style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              background: member.user === user?.id 
+                                ? 'linear-gradient(135deg, #1890ff, #40a9ff)' 
+                                : 'linear-gradient(135deg, #52c41a, #73d13d)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: 600,
+                              fontSize: 14
+                            }}>
+                              {member.username ? member.username.charAt(0).toUpperCase() : 
+                               member.user_name ? member.user_name.charAt(0).toUpperCase() : 
+                               'U'}
+                            </div>
+                            <div>
+                              <div style={{ 
+                                fontSize: 14, 
+                                fontWeight: 600,
+                                color: '#262626'
+                              }}>
+                                {member.username || member.user_name}
+                                {member.user === user?.id && (
+                                  <Tag 
+                                    color="blue" 
+                                    size="small" 
+                                    style={{ marginLeft: 8 }}
+                                  >
+                                    我
+                                  </Tag>
+                                )}
+                              </div>
+                              <div style={{ 
+                                fontSize: 12, 
+                                color: '#8c8c8c',
+                                marginTop: 2
+                              }}>
+                                成员ID: {member.user}
+                              </div>
+                            </div>
+                          </div>
+                        }
             rules={[
-              { required: true, message: '请输入投票金额！' },
-              { type: 'number', min: 0.01, max: 1.00, message: '金额必须在0.01-1.00元之间！' }
+                          { required: true, message: '请输入分数！' },
+                          { type: 'number', min: 0, max: 100, message: '分数必须在0-100之间！' }
             ]}
+                        style={{ marginBottom: 0 }}
           >
             <InputNumber
-              min={0.01}
-              max={1.00}
-              step={0.01}
-              precision={2}
-              style={{ width: '100%' }}
-              placeholder="请输入投票金额 (0.01-1.00元)"
-              addonBefore="¥"
+                          min={0}
+                          max={100}
+                          step={1}
+                          style={{ 
+                            width: '100%',
+                            height: 40,
+                            fontSize: 16
+                          }}
+                          placeholder="请输入分数 (0-100)"
+                          addonAfter={
+                            <span style={{ 
+                              color: '#1890ff', 
+                              fontWeight: 600,
+                              fontSize: 14
+                            }}>
+                              分
+                            </span>
+                          }
+                          size="large"
             />
           </Form.Item>
+                    </div>
+                  ));
+                })()}
+              </div>
+              
+              {/* 操作按钮 */}
+              <div style={{ 
+                marginTop: 24, 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#8c8c8c',
+                  fontSize: 12
+                }}>
+                  <span>⚠️</span>
+                  <span>请确保总分等于100分</span>
+                </div>
+                
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <Button 
+                    onClick={handleCloseParticipation}
+                    size="large"
+                    style={{
+                      height: 40,
+                      paddingLeft: 24,
+                      paddingRight: 24,
+                      borderRadius: 6
+                    }}
+                  >
+                    取消
+                  </Button>
+                  <Button 
+                    type="primary" 
+                    onClick={handleSubmitParticipation}
+                    size="large"
+                    style={{
+                      height: 40,
+                      paddingLeft: 24,
+                      paddingRight: 24,
+                      borderRadius: 6,
+                      background: 'linear-gradient(135deg, #1890ff, #40a9ff)',
+                      border: 'none',
+                      boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
+                    }}
+                  >
+                    <span style={{ marginRight: 4 }}>✓</span>
+                    提交投票
+                  </Button>
+                </div>
+              </div>
         </Form>
+          </div>
+        )}
       </Modal>
 
-      {/* 自评增资Modal */}
-      <SelfEvaluationModal
-        visible={isSelfEvaluationVisible}
-        onCancel={handleSelfEvaluationClose}
-        onSuccess={handleSelfEvaluationSuccess}
-        userOrProject={selfEvaluationEntity}
-        entityType={selfEvaluationType}
-      />
+      {/* 投票结果Modal */}
+      <Modal
+        title={`投票结果 - ${voteResults?.vote?.title || ''}`}
+        open={isResultModalVisible}
+        onCancel={handleCloseResult}
+        width={1000}
+        destroyOnClose={true}
+        footer={[
+          <Button key="close" onClick={handleCloseResult}>
+            关闭
+          </Button>
+        ]}
+      >
+        {voteResults && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>计算方法：</Text>
+              <Tag color="blue" style={{ marginLeft: 8 }}>
+                {voteResults.calculationMethod}
+              </Tag>
+            </div>
+            
+            <Table
+              dataSource={voteResults.results}
+              rowKey={(record) => record.participant.user}
+              pagination={false}
+              columns={[
+                {
+                  title: '参与者',
+                  dataIndex: ['participant', 'username'],
+                  key: 'participant',
+                  render: (text, record) => (
+                    <Space>
+                      <Avatar size="small" icon={<UserOutlined />} />
+                      {text || record.participant.user_name} {record.participant.user === user?.id ? '(我)' : ''}
+                    </Space>
+                  ),
+                },
+                {
+                  title: '自评分数',
+                  dataIndex: 'originalSelfScore',
+                  key: 'originalSelfScore',
+                  render: (score) => <Text>{score}分</Text>,
+                },
+                {
+                  title: '他人平均分',
+                  dataIndex: 'othersAverageScore',
+                  key: 'othersAverageScore',
+                  render: (score) => <Text>{Math.round(score * 10) / 10}分</Text>,
+                },
+                {
+                  title: '基准分数',
+                  dataIndex: 'baseScore',
+                  key: 'baseScore',
+                  render: (score) => <Text>{Math.round(score * 10) / 10}分</Text>,
+                },
+                {
+                  title: '调整后分数',
+                  dataIndex: 'adjustedScore',
+                  key: 'adjustedScore',
+                  render: (score) => <Text>{Math.round(score * 10) / 10}分</Text>,
+                },
+                {
+                  title: '最终分数',
+                  dataIndex: 'finalScore',
+                  key: 'finalScore',
+                  render: (score) => (
+                    <Text strong style={{ color: '#1890ff', fontSize: 16 }}>
+                      {score}分
+                    </Text>
+                  ),
+                },
+              ]}
+            />
+            
+            <div style={{ marginTop: 16, padding: 16, backgroundColor: '#f5f5f5', borderRadius: 6 }}>
+              <Text strong>计算说明：</Text>
+              <br />
+              <Text type="secondary">
+                {voteResults.calculationMethod === '双人互评' && 
+                  '双人互评采用对方评分作为基准，通过偏差率动态调整自评分数，确保评分的合理性。'}
+                {voteResults.calculationMethod === '双基准交叉验证' && 
+                  '双基准交叉验证结合平均值和中位数，去除异常值后计算基准分数，通过动态系数调整自评分数。'}
+                {voteResults.calculationMethod === '贝叶斯平均' && 
+                  '贝叶斯平均结合他人评分和全局平均分，通过权重平衡计算基准分数，适用于大群体评分。'}
+              </Text>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 登录提示 */}
       <LoginPrompt

@@ -72,10 +72,52 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
   const [myTasks, setMyTasks] = useState([]); // 我的任务
   const [loading, setLoading] = useState(false);
   const [claimingTaskId, setClaimingTaskId] = useState(null);
-  const [selectedAssignee, setSelectedAssignee] = useState(null); // 选中的负责人
-  const [weightCoefficient, setWeightCoefficient] = useState(1.0); // 权重系数
+  const [selectedAssignee, setSelectedAssignee] = useState(null); // 选中的负责人（兼容旧版本）
+  const [weightCoefficient, setWeightCoefficient] = useState(1.0); // 权重系数（兼容旧版本）
+  const [availablePercentage, setAvailablePercentage] = useState(100); // 可分配的任务占比
+  const [participatingMembers, setParticipatingMembers] = useState([]); // 参与成员列表
   
   const { user } = useAuthStore();
+
+  // 计算可用的任务占比
+  const calculateAvailablePercentage = () => {
+    const usedPercentage = tasks.reduce((total, task) => {
+      return total + (task.task_percentage || 0);
+    }, 0);
+    const available = 100 - usedPercentage;
+    setAvailablePercentage(Math.max(0, available));
+    return available;
+  };
+
+  // 更新可用占比
+  useEffect(() => {
+    calculateAvailablePercentage();
+  }, [tasks]);
+
+  // 添加参与成员
+  const addParticipatingMember = (memberId) => {
+    const member = getProjectMembers().find(m => m.user === memberId);
+    if (member && !participatingMembers.find(p => p.user === memberId)) {
+      setParticipatingMembers([...participatingMembers, {
+        user: member.user,
+        user_name: member.user_name,
+        role: member.role,
+        coefficient: 1.0
+      }]);
+    }
+  };
+
+  // 移除参与成员
+  const removeParticipatingMember = (memberId) => {
+    setParticipatingMembers(participatingMembers.filter(p => p.user !== memberId));
+  };
+
+  // 更新成员系数
+  const updateMemberCoefficient = (memberId, coefficient) => {
+    setParticipatingMembers(participatingMembers.map(p => 
+      p.user === memberId ? { ...p, coefficient } : p
+    ));
+  };
 
   useEffect(() => {
     if (projectId) {
@@ -182,9 +224,13 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     setIsModalVisible(true);
     setSelectedAssignee(null);
     setWeightCoefficient(1.0);
+    setParticipatingMembers([]); // 重置参与成员列表
     form.resetFields();
-    // 预设项目ID
-    form.setFieldsValue({ project: projectId });
+    // 预设项目ID和任务占比
+    form.setFieldsValue({ 
+      project: projectId,
+      task_percentage: 0
+    });
   };
 
   const handleEditTask = (task) => {
@@ -192,8 +238,28 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     setIsModalVisible(true);
     setSelectedAssignee(task.assignee);
     setWeightCoefficient(task.weight_coefficient || 1.0);
+    
+    // 处理参与成员数据
+    if (task.participating_members && Array.isArray(task.participating_members)) {
+      setParticipatingMembers(task.participating_members);
+    } else if (task.assignee) {
+      // 兼容旧数据，将单个负责人转换为参与成员
+      const member = getProjectMembers().find(m => m.user === task.assignee);
+      if (member) {
+        setParticipatingMembers([{
+          user: member.user,
+          user_name: member.user_name,
+          role: member.role,
+          coefficient: task.weight_coefficient || 1.0
+        }]);
+      }
+    } else {
+      setParticipatingMembers([]);
+    }
+    
     form.setFieldsValue({
       ...task,
+      task_percentage: task.task_percentage || task.progress || 0, // 兼容旧数据
       weight_coefficient: task.weight_coefficient || 1.0,
       start_date: task.start_date ? dayjs(task.start_date) : null,
       due_date: task.due_date ? dayjs(task.due_date) : null,
@@ -241,16 +307,20 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             formData.append('description', values.description || '');
             formData.append('priority', values.priority || 'medium');
             formData.append('status', values.status || 'pending');
-            formData.append('progress', values.progress || 0);
+            formData.append('task_percentage', values.task_percentage || 0);
             formData.append('category', values.category || '');
             formData.append('tags', values.tags || '');
             formData.append('estimated_hours', values.estimated_hours || '');
             
-            if (values.assignee) {
-              formData.append('assignee', values.assignee);
+            // 添加参与成员数据
+            if (participatingMembers.length > 0) {
+              formData.append('participating_members', JSON.stringify(participatingMembers));
             }
-            if (values.weight_coefficient) {
-              formData.append('weight_coefficient', values.weight_coefficient);
+            
+            // 兼容旧版本：如果只有一个参与成员，也设置assignee
+            if (participatingMembers.length === 1) {
+              formData.append('assignee', participatingMembers[0].user);
+              formData.append('weight_coefficient', participatingMembers[0].coefficient);
             }
             
             if (values.start_date) {
@@ -274,11 +344,10 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             const taskData = {
               title: values.title,
               description: values.description,
-              assignee: values.assignee,
-              weight_coefficient: values.weight_coefficient,
+              participating_members: participatingMembers,
               priority: values.priority,
               status: values.status,
-              progress: values.progress,
+              task_percentage: values.task_percentage,
               category: values.category,
               tags: values.tags,
               estimated_hours: values.estimated_hours,
@@ -300,16 +369,20 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             formData.append('project', projectId);
             formData.append('priority', values.priority || 'medium');
             formData.append('status', values.status || 'pending');
-            formData.append('progress', values.progress || 0);
+            formData.append('task_percentage', values.task_percentage || 0);
             formData.append('category', values.category || '');
             formData.append('tags', values.tags || '');
             formData.append('estimated_hours', values.estimated_hours || '');
             
-            if (values.assignee) {
-              formData.append('assignee', values.assignee);
+            // 添加参与成员数据
+            if (participatingMembers.length > 0) {
+              formData.append('participating_members', JSON.stringify(participatingMembers));
             }
-            if (values.weight_coefficient) {
-              formData.append('weight_coefficient', values.weight_coefficient);
+            
+            // 兼容旧版本：如果只有一个参与成员，也设置assignee
+            if (participatingMembers.length === 1) {
+              formData.append('assignee', participatingMembers[0].user);
+              formData.append('weight_coefficient', participatingMembers[0].coefficient);
             }
             
             if (values.start_date) {
@@ -333,12 +406,11 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             const taskData = {
               title: values.title,
               description: values.description,
-              assignee: values.assignee,
-              weight_coefficient: values.weight_coefficient,
+              participating_members: participatingMembers,
               project: projectId,
               priority: values.priority || 'medium',
               status: values.status || 'pending',
-              progress: values.progress || 0,
+              task_percentage: values.task_percentage || 0,
               category: values.category,
               tags: values.tags,
               estimated_hours: values.estimated_hours,
@@ -384,6 +456,7 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
     setEditingTask(null);
     setSelectedAssignee(null);
     setWeightCoefficient(1.0);
+    setParticipatingMembers([]); // 重置参与成员列表
     form.resetFields();
   };
 
@@ -542,12 +615,29 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
       ),
     },
     {
-      title: '负责人',
-      dataIndex: 'assignee_name',
-      key: 'assignee_name',
-      width: 150,
-      render: (text, record) => {
-        if (!text) {
+      title: '参与成员',
+      dataIndex: 'participating_members',
+      key: 'participating_members',
+      width: 200,
+      render: (participatingMembers, record) => {
+        // 兼容旧数据：如果没有参与成员数据，显示负责人
+        if (!participatingMembers || !Array.isArray(participatingMembers) || participatingMembers.length === 0) {
+          if (record.assignee_name) {
+            return (
+              <Space direction="vertical" size={2}>
+                <Space>
+                  <Avatar size="small" icon={<UserOutlined />} />
+                  <Text style={{ fontSize: '13px' }}>{record.assignee_name}</Text>
+                </Space>
+                <Tag color="orange" size="small">负责人</Tag>
+                {record.weight_coefficient && (
+                  <Tag color="blue" size="small">
+                    权重: {record.weight_coefficient}
+                  </Tag>
+                )}
+              </Space>
+            );
+          }
           return (
             <Space direction="vertical" size={2}>
               <Space>
@@ -559,17 +649,36 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             </Space>
           );
         }
+        
+        // 显示参与成员列表
+        if (participatingMembers.length === 1) {
+          const member = participatingMembers[0];
+          return (
+            <Space direction="vertical" size={2}>
+              <Space>
+                <Avatar size="small" icon={<UserOutlined />} />
+                <Text style={{ fontSize: '13px' }}>{member.user_name || member.name}</Text>
+              </Space>
+              <Tag color="green" size="small">系数: {member.coefficient || 1.0}</Tag>
+            </Space>
+          );
+        }
+        
         return (
           <Space direction="vertical" size={2}>
-            <Space>
-              <Avatar size="small" icon={<UserOutlined />} />
-              <Text style={{ fontSize: '13px' }}>{text}</Text>
-            </Space>
-            {record.weight_coefficient && (
-              <Tag color="blue" size="small">
-                权重: {record.weight_coefficient}
-              </Tag>
-            )}
+            <Tag color="blue" size="small">{participatingMembers.length}人参与</Tag>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {participatingMembers.slice(0, 2).map((member, index) => (
+                <Tag key={index} size="small" color="green">
+                  {member.user_name || member.name}
+                </Tag>
+              ))}
+              {participatingMembers.length > 2 && (
+                <Tag size="small" color="default">
+                  +{participatingMembers.length - 2}
+                </Tag>
+              )}
+            </div>
           </Space>
         );
       },
@@ -589,16 +698,32 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
       render: (priority) => getPriorityTag(priority),
     },
     {
-      title: '进度',
-      dataIndex: 'progress',
-      key: 'progress',
+      title: '任务占比',
+      dataIndex: 'task_percentage',
+      key: 'task_percentage',
       width: 120,
-      render: (progress = 0) => (
-        <Progress 
-          percent={progress} 
-          size="small" 
-          style={{ width: 80 }}
-        />
+      render: (task_percentage = 0, record) => (
+        <div>
+          <div style={{ 
+            background: '#f6ffed', 
+            color: '#52c41a', 
+            padding: '2px 6px', 
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            marginBottom: '4px'
+          }}>
+            {task_percentage || record.progress || 0}%
+          </div>
+          <Progress
+            percent={task_percentage || record.progress || 0}
+            size="small"
+            style={{ width: 80 }}
+            status={(task_percentage || record.progress || 0) > 0 ? 'active' : 'normal'}
+            strokeColor="#52c41a"
+          />
+        </div>
       ),
     },
     {
@@ -994,18 +1119,23 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             </Col>
             <Col span={12}>
               <Form.Item
-                name="assignee"
-                label="负责人"
+                name="participating_members"
+                label="参与成员"
+                rules={[{ required: true, message: '请选择参与成员！' }]}
               >
                 <Select 
-                  placeholder="请选择负责人" 
+                  mode="multiple"
+                  placeholder="请选择参与成员" 
                   allowClear
-                  onChange={(value) => {
-                    setSelectedAssignee(value);
-                    // 重置权重系数
-                    setWeightCoefficient(1.0);
-                    form.setFieldsValue({ weight_coefficient: 1.0 });
+                  onChange={(values) => {
+                    // 清空当前参与成员列表
+                    setParticipatingMembers([]);
+                    // 添加新选择的成员
+                    values.forEach(memberId => {
+                      addParticipatingMember(memberId);
+                    });
                   }}
+                  value={participatingMembers.map(p => p.user)}
                 >
                   {getProjectMembers().map(member => (
                     <Option key={member.user} value={member.user}>
@@ -1021,51 +1151,73 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
             </Col>
           </Row>
 
-          {/* 权重系数设置 - 只有选择了负责人才显示 */}
-          {selectedAssignee && (
+          {/* 参与成员系数设置 */}
+          {participatingMembers.length > 0 && (
             <Row gutter={16}>
-              <Col span={12}>
+              <Col span={24}>
                 <Form.Item
-                  name="weight_coefficient"
-                  label="项目权重系数"
-                  initialValue={1.0}
-                  rules={[
-                    { required: false, message: '请输入权重系数' },
-                    { type: 'number', min: 0.1, max: 1.0, message: '权重系数范围为0.1-1.0' }
-                  ]}
+                  label="参与成员系数设置"
                 >
-                  <Slider
-                    min={0.1}
-                    max={1.0}
-                    step={0.1}
-                    marks={{
-                      0.1: '0.1',
-                      0.3: '0.3',
-                      0.5: '0.5',
-                      0.7: '0.7',
-                      1.0: '1.0'
-                    }}
-                    value={weightCoefficient}
-                    onChange={(value) => {
-                      setWeightCoefficient(value);
-                      form.setFieldsValue({ weight_coefficient: value });
-                    }}
-                    tooltip={{
-                      formatter: (value) => `${value}`
-                    }}
-                  />
+                  <div>
+                    <div style={{ 
+                      marginBottom: 12, 
+                      padding: 8, 
+                      background: '#fff7e6', 
+                      borderRadius: 6,
+                      border: '1px solid #ffd591'
+                    }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        为每个参与成员设置权重系数，用于计算任务完成后的功分分配。系数越高，获得的功分越多。
+                      </Text>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {participatingMembers.map((member, index) => (
+                        <div key={member.user} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px',
+                          background: '#f6ffed',
+                          borderRadius: '8px',
+                          border: '1px solid #b7eb8f'
+                        }}>
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Avatar size="small" icon={<UserOutlined />} />
+                            <span style={{ fontWeight: 'bold' }}>{member.user_name}</span>
+                            {member.role === 'owner' && <Tag color="blue" size="small">创建者</Tag>}
+                            {member.role === 'admin' && <Tag color="green" size="small">管理员</Tag>}
+                          </div>
+                          <div style={{ flex: 2, padding: '0 16px' }}>
+                            <Slider
+                              min={0.1}
+                              max={1.0}
+                              step={0.1}
+                              value={member.coefficient}
+                              onChange={(value) => updateMemberCoefficient(member.user, value)}
+                              marks={{
+                                0.1: '0.1',
+                                0.3: '0.3',
+                                0.5: '0.5',
+                                0.7: '0.7',
+                                1.0: '1.0'
+                              }}
+                              tooltip={{
+                                formatter: (value) => `${value}`
+                              }}
+                            />
+                          </div>
+                          <div style={{ 
+                            minWidth: '40px', 
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            color: '#52c41a'
+                          }}>
+                            {member.coefficient}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Form.Item>
-              </Col>
-              <Col span={12}>
-                <div style={{ paddingTop: '30px' }}>
-                  <Text type="secondary">
-                    权重系数: <Text strong style={{ color: '#1890ff' }}>{weightCoefficient}</Text>
-                    <br />
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                      用于计算该任务在项目中的重要性权重
-                    </Text>
-                  </Text>
-                </div>
               </Col>
             </Row>
           )}
@@ -1137,19 +1289,55 @@ const ProjectTasks = ({ projectId, project, isProjectOwner }) => {
           </Row>
 
           <Form.Item
-            name="progress"
-            label="完成进度"
+            name="task_percentage"
+            label={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>任务占比</span>
+                <Tag color={availablePercentage > 0 ? 'green' : 'red'}>
+                  剩余可分配: {availablePercentage}%
+                </Tag>
+              </div>
+            }
+            rules={[
+              { required: true, message: '请设置任务占比！' },
+              { 
+                validator: (_, value) => {
+                  if (value > availablePercentage) {
+                    return Promise.reject(new Error(`任务占比不能超过剩余可分配比例 ${availablePercentage}%`));
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
             initialValue={0}
           >
-            <Slider
-              marks={{
-                0: '0%',
-                25: '25%',
-                50: '50%',
-                75: '75%',
-                100: '100%'
-              }}
-            />
+            <div>
+              <div style={{ 
+                marginBottom: 8, 
+                padding: 8, 
+                background: '#f6ffed', 
+                borderRadius: 6,
+                border: '1px solid #b7eb8f'
+              }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  此任务占项目总工作量的比例。当前项目剩余可分配比例: {availablePercentage}%
+                </Text>
+              </div>
+              <Slider
+                min={0}
+                max={availablePercentage}
+                marks={{
+                  0: '0%',
+                  ...(availablePercentage >= 25 && { 25: '25%' }),
+                  ...(availablePercentage >= 50 && { 50: '50%' }),
+                  ...(availablePercentage >= 75 && { 75: '75%' }),
+                  [availablePercentage]: `${availablePercentage}%`
+                }}
+                tooltip={{
+                  formatter: (value) => `${value}%`
+                }}
+              />
+            </div>
           </Form.Item>
 
           <Form.Item

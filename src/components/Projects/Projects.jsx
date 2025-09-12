@@ -48,17 +48,16 @@ import {
   EyeOutlined,
   ProjectOutlined,
   AppstoreOutlined,
+  CrownOutlined,
+  InfoCircleOutlined,
   BarsOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
 import ProjectLogs from './ProjectLogs';
-import MemberRecruitment from './MemberRecruitment';
 import ProjectRevenue from './ProjectRevenue';
-import Merit from '../Merit/Merit';
 import ProjectAnalytics from './ProjectAnalytics';
-import ProjectTeamEvaluation from './ProjectTeamEvaluation';
 import ProjectTasks from './ProjectTasks';
 import ProjectCardGrid from './ProjectCardGrid';
 import Voting from '../Voting/Voting';
@@ -76,6 +75,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [viewingProject, setViewingProject] = useState(null);
+  const [isPublicProject, setIsPublicProject] = useState(false); // 公开项目开关状态
   // 使用传入的activeTab，如果没有传入则使用默认值
   const internalActiveTab = activeTab || 'all';
   // 使用传入的排序参数，如果没有传入则使用默认值
@@ -88,10 +88,36 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
   const [defaultDetailTab, setDefaultDetailTab] = useState('info'); // 默认详情页标签
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
+  const [isMemberSettingsModalVisible, setIsMemberSettingsModalVisible] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [isMemberInfoModalVisible, setIsMemberInfoModalVisible] = useState(false);
   const fetchTimeoutRef = useRef(null);
   const lastFetchTimeRef = useRef(null);
   
   const { user, updateProfile } = useAuthStore();
+  
+  // 处理公开项目开关
+  const handlePublicProjectToggle = async (checked) => {
+    if (!viewingProject) return;
+    
+    try {
+      setIsPublicProject(checked);
+      // 这里可以调用API更新项目的公开状态
+      // await projectsAPI.updateProjectPublicStatus(viewingProject.id, checked);
+      message.success(checked ? '项目已设为公开，将在项目大厅显示' : '项目已设为私有');
+      
+      // 更新本地项目数据
+      setViewingProject({
+        ...viewingProject,
+        is_public: checked
+      });
+    } catch (error) {
+      console.error('更新项目公开状态失败:', error);
+      message.error('更新项目公开状态失败');
+      setIsPublicProject(!checked); // 回滚状态
+    }
+  };
+  
   const { 
     projects: storeProjects, 
     fetchProjects, 
@@ -300,6 +326,98 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     form.setFieldsValue(formValues);
   };
 
+  // 处理成员设置
+  const handleMemberSettings = (member) => {
+    setSelectedMember(member);
+    setIsMemberSettingsModalVisible(true);
+  };
+
+  // 处理查看成员信息
+  const handleViewMemberInfo = (member) => {
+    setSelectedMember(member);
+    setIsMemberInfoModalVisible(true);
+  };
+
+  // 处理设置管理员
+  const handleSetAdmin = async (member) => {
+    Modal.confirm({
+      title: '确认设置管理员权限',
+      content: `确定要将 ${member.user_name} 设置为管理员吗？管理员将拥有项目的管理权限。`,
+      icon: <CrownOutlined style={{ color: '#1890ff' }} />,
+      okText: '确认设置',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          // 这里应该调用API设置管理员
+          console.log('设置管理员:', member);
+          
+          // 更新本地状态，将成员角色设置为admin
+          if (viewingProject && viewingProject.members_detail) {
+            const updatedMembers = viewingProject.members_detail.map(m => 
+              m.user === member.user ? { ...m, role: 'admin' } : m
+            );
+            setViewingProject({
+              ...viewingProject,
+              members_detail: updatedMembers
+            });
+          }
+          
+          message.success(`已将 ${member.user_name} 设置为管理员`);
+        } catch (error) {
+          console.error('设置管理员失败:', error);
+          message.error('设置管理员失败');
+        }
+      }
+    });
+  };
+
+  // 处理解除管理员
+  const handleRemoveAdmin = async (member) => {
+    Modal.confirm({
+      title: '确认解除管理员权限',
+      content: `确定要解除 ${member.user_name} 的管理员权限吗？解除后该成员将变为普通成员。`,
+      icon: <CrownOutlined style={{ color: '#fa8c16' }} />,
+      okText: '确认解除',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          // 这里应该调用API解除管理员
+          console.log('解除管理员:', member);
+          
+          // 更新本地状态，将成员角色设置为member
+          if (viewingProject && viewingProject.members_detail) {
+            const updatedMembers = viewingProject.members_detail.map(m => 
+              m.user === member.user ? { ...m, role: 'member' } : m
+            );
+            setViewingProject({
+              ...viewingProject,
+              members_detail: updatedMembers
+            });
+          }
+          
+          message.success(`已解除 ${member.user_name} 的管理员权限`);
+        } catch (error) {
+          console.error('解除管理员失败:', error);
+          message.error('解除管理员失败');
+        }
+      }
+    });
+  };
+
+  // 处理删除成员
+  const handleDeleteMember = async (member) => {
+    try {
+      // 这里应该调用API删除成员
+      console.log('删除成员:', member);
+      message.success(`已删除成员 ${member.user_name}`);
+      setIsMemberSettingsModalVisible(false);
+    } catch (error) {
+      console.error('删除成员失败:', error);
+      message.error('删除成员失败');
+    }
+  };
+
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
@@ -384,6 +502,22 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     return project.owner === user.id;
   };
 
+  // 检查用户是否有管理员权限（项目创建者或管理员）
+  const hasAdminPermission = (project) => {
+    if (!user || !project) return false;
+    
+    // 如果是项目创建者
+    if (project.owner === user.id) return true;
+    
+    // 如果是管理员
+    if (project.members_detail) {
+      const userMembership = project.members_detail.find(member => member.user === user.id);
+      return userMembership && userMembership.role === 'admin';
+    }
+    
+    return false;
+  };
+
   // 检查用户是否为管理员或项目创建者
   const canViewProjectLogs = (project) => {
     if (!user) return false;
@@ -405,6 +539,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
   const handleViewProject = (project) => {
     setViewingProject(project);
+    setIsPublicProject(project.is_public || false); // 初始化公开项目状态
     setDefaultDetailTab('info');
     setIsDetailModalVisible(true);
   };
@@ -1145,7 +1280,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                 name="is_public"
                 label="公开展示"
                 valuePropName="checked"
-                tooltip="开启后，项目信息将在公开页面展示，任何人都可以查看"
+                tooltip="开启开关后，项目将显示在项目大厅内"
               >
                 <Switch />
               </Form.Item>
@@ -1187,6 +1322,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
         onCancel={() => {
           setIsDetailModalVisible(false);
           setViewingProject(null);
+          setIsPublicProject(false); // 重置公开项目状态
           setDefaultDetailTab('info');
         }}
         footer={null}
@@ -1237,11 +1373,45 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                         borderRadius: '8px',
                         padding: '16px',
                         color: 'white',
-                        textAlign: 'center'
+                        position: 'relative'
                       }}>
-                        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                          {viewingProject.name}
-                      </div>
+                        <div style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}>
+                          <div style={{ 
+                            fontSize: '18px', 
+                            fontWeight: 'bold',
+                            flex: 1,
+                            textAlign: 'center'
+                          }}>
+                            {viewingProject.name}
+                          </div>
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            background: 'rgba(255, 255, 255, 0.2)',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            backdropFilter: 'blur(10px)'
+                          }}>
+                            <span style={{ fontSize: '14px', fontWeight: '500' }}>公开项目</span>
+                            <Switch
+                              size="small"
+                              checked={isPublicProject}
+                              onChange={handlePublicProjectToggle}
+                              checkedChildren="开"
+                              unCheckedChildren="关"
+                              style={{
+                                backgroundColor: isPublicProject ? '#52c41a' : '#d9d9d9'
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* 项目描述 */}
@@ -1394,7 +1564,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                             style={{ backgroundColor: '#52c41a' }}
                           />
                         </div>
-                        {isProjectOwner(viewingProject) && (
+                        {hasAdminPermission(viewingProject) && (
                           <Button 
                             type="primary" 
                             size="small" 
@@ -1435,36 +1605,69 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Avatar 
-                                  size={40} 
-                                  icon={<UserOutlined />}
-                                  style={{ 
-                                    backgroundColor: '#52c41a',
-                                    border: '2px solid #fff',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                                  }}
-                                />
+                                <div style={{ position: 'relative' }}>
+                                  <Avatar 
+                                    size={40} 
+                                    icon={<UserOutlined />}
+                                    style={{ 
+                                      backgroundColor: member.role === 'admin' ? '#722ed1' : '#52c41a',
+                                      border: '2px solid #fff',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}
+                                  />
+                                  {member.role === 'admin' && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      bottom: -2,
+                                      right: -2,
+                                      background: 'linear-gradient(135deg, #722ed1, #9254de)',
+                                      color: 'white',
+                                      fontSize: '10px',
+                                      fontWeight: 'bold',
+                                      padding: '2px 4px',
+                                      borderRadius: '4px',
+                                      border: '2px solid #fff',
+                                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                                      minWidth: '20px',
+                                      textAlign: 'center',
+                                      lineHeight: 1
+                                    }}>
+                                      管理
+                                    </div>
+                                  )}
+                                  {member.role === 'owner' && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      bottom: -2,
+                                      right: -2,
+                                      background: 'linear-gradient(135deg, #fa8c16, #ffa940)',
+                                      color: 'white',
+                                      fontSize: '10px',
+                                      fontWeight: 'bold',
+                                      padding: '2px 4px',
+                                      borderRadius: '4px',
+                                      border: '2px solid #fff',
+                                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                                      minWidth: '20px',
+                                      textAlign: 'center',
+                                      lineHeight: 1
+                                    }}>
+                                      创建
+                                    </div>
+                                  )}
+                                </div>
                                 <div>
                                   <div style={{ fontWeight: '600', color: '#495057', fontSize: '14px' }}>
                                     {member.user_name}
                                   </div>
                                   <div style={{ color: '#6c757d', fontSize: '12px' }}>
-                                    项目成员
+                                    {member.role === 'owner' ? '项目负责人' : 
+                                     member.role === 'admin' ? '管理员' : '项目成员'}
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ 
-                                  background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-                                  color: 'white',
-                                  padding: '4px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '12px',
-                                  fontWeight: 'bold',
-                                  marginBottom: '4px'
-                                }}>
-                                  {Number(member.equity_percentage || 0).toFixed(2)}% 股权
-                                </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {/* 成员信息标签 */}
                                 <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
                                   <div style={{ 
                                     background: '#e6f7ff',
@@ -1472,9 +1675,9 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                                     padding: '2px 6px',
                                     borderRadius: '8px'
                                   }}>
-                                贡献: {member.contribution_percentage || 0}%
+                                    贡献: {member.contribution_percentage || 0}%
                                   </div>
-                              {Number(member.investment_amount || 0) > 0 && (
+                                  {Number(member.investment_amount || 0) > 0 && (
                                     <div style={{ 
                                       background: '#fff7e6',
                                       color: '#fa8c16',
@@ -1484,7 +1687,78 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                                       投资: ¥{Number(member.investment_amount || 0).toFixed(0)}
                                     </div>
                                   )}
+                                  <div style={{ 
+                                    background: '#f6ffed',
+                                    color: '#52c41a',
+                                    padding: '2px 6px',
+                                    borderRadius: '8px'
+                                  }}>
+                                    股权: {Number(member.equity_percentage || 0).toFixed(2)}%
+                                  </div>
                                 </div>
+                                
+                                {/* 设置按钮 - 只有管理员和项目创建者才能看到 */}
+                                {hasAdminPermission(viewingProject) && (
+                                <Dropdown
+                                  menu={{
+                                    items: [
+                                      {
+                                        key: 'view',
+                                        label: '查看信息',
+                                        icon: <InfoCircleOutlined />,
+                                        onClick: () => handleViewMemberInfo(member)
+                                      },
+                                      // 根据成员角色显示不同的管理员操作
+                                      ...(member.role === 'admin' ? [
+                                        {
+                                          key: 'remove-admin',
+                                          label: '解除管理员',
+                                          icon: <CrownOutlined />,
+                                          disabled: member.role === 'owner',
+                                          onClick: () => handleRemoveAdmin(member)
+                                        }
+                                      ] : [
+                                        {
+                                          key: 'set-admin',
+                                          label: '设置管理员',
+                                          icon: <CrownOutlined />,
+                                          disabled: member.role === 'owner',
+                                          onClick: () => handleSetAdmin(member)
+                                        }
+                                      ]),
+                                      {
+                                        type: 'divider'
+                                      },
+                                      {
+                                        key: 'delete',
+                                        label: '删除成员',
+                                        icon: <DeleteOutlined />,
+                                        danger: true,
+                                        disabled: member.role === 'owner' || member.user === user?.id,
+                                        onClick: () => handleDeleteMember(member)
+                                      }
+                                    ]
+                                  }}
+                                    trigger={['click']}
+                                    placement="bottomRight"
+                                  >
+                                    <Button 
+                                      type="text" 
+                                      size="small"
+                                      icon={<SettingOutlined />}
+                                      style={{
+                                        color: '#8c8c8c',
+                                        border: '1px solid #d9d9d9',
+                                        borderRadius: '6px',
+                                        height: '28px',
+                                        width: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                    />
+                                  </Dropdown>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1502,13 +1776,16 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                       </div>
                     )}
                   </Card>
-                  
-                  {/* 在基本信息页面添加项目动态 */}
+
+                  {/* 股东成员窗口 */}
                   <Card 
                     title={
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <CalendarOutlined style={{ color: '#fa8c16' }} />
-                        <span style={{ fontSize: '16px', fontWeight: '600' }}>最近动态</span>
+                        <CrownOutlined style={{ color: '#fa8c16' }} />
+                        <span style={{ fontSize: '16px', fontWeight: '600' }}>股东成员</span>
+                        <Tag color="gold" style={{ marginLeft: '8px' }}>
+                          股权持有者
+                        </Tag>
                       </div>
                     }
                     size="small" 
@@ -1520,7 +1797,187 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                     }}
                     bodyStyle={{ padding: '20px' }}
                   >
-                    <ProjectLogs projectId={viewingProject.id} showTitle={false} maxHeight={200} />
+                    {viewingProject.members_detail && viewingProject.members_detail.filter(member => 
+                      Number(member.equity_percentage || 0) > 0
+                    ).length > 0 ? (
+                      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                        {viewingProject.members_detail
+                          .filter(member => Number(member.equity_percentage || 0) > 0)
+                          .sort((a, b) => Number(b.equity_percentage || 0) - Number(a.equity_percentage || 0))
+                          .map((member, index) => (
+                          <div 
+                            key={member.user} 
+                            style={{ 
+                              background: index % 2 === 0 ? '#fff7e6' : '#fff',
+                              borderRadius: '8px',
+                              padding: '16px',
+                              border: '1px solid #ffd591',
+                              transition: 'all 0.3s ease',
+                              position: 'relative'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ position: 'relative' }}>
+                                  <Avatar 
+                                    size={40} 
+                                    icon={<UserOutlined />}
+                                    style={{ 
+                                      backgroundColor: '#fa8c16',
+                                      border: '2px solid #fff',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}
+                                  />
+                                  {/* 股权排名标识 */}
+                                  {index < 3 && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: -4,
+                                      left: -4,
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: '50%',
+                                      background: index === 0 ? 'linear-gradient(135deg, #ffd700, #ffed4e)' :
+                                                  index === 1 ? 'linear-gradient(135deg, #c0c0c0, #e8e8e8)' :
+                                                  'linear-gradient(135deg, #cd7f32, #daa520)',
+                                      color: 'white',
+                                      fontSize: '10px',
+                                      fontWeight: 'bold',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      border: '2px solid #fff',
+                                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
+                                    }}>
+                                      {index + 1}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: '600', color: '#495057', fontSize: '14px' }}>
+                                    {member.user_name}
+                                  </div>
+                                  <div style={{ color: '#6c757d', fontSize: '12px' }}>
+                                    {member.role === 'owner' ? '项目负责人' : 
+                                     member.role === 'admin' ? '管理员' : '股东成员'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {/* 股权信息 */}
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ 
+                                    background: 'linear-gradient(135deg, #fa8c16 0%, #ffa940 100%)',
+                                    color: 'white',
+                                    padding: '6px 12px',
+                                    borderRadius: '16px',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold',
+                                    marginBottom: '4px',
+                                    boxShadow: '0 2px 4px rgba(250, 140, 22, 0.3)'
+                                  }}>
+                                    {Number(member.equity_percentage || 0).toFixed(2)}% 股权
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
+                                    {Number(member.investment_amount || 0) > 0 && (
+                                      <div style={{ 
+                                        background: '#e6f7ff',
+                                        color: '#1890ff',
+                                        padding: '2px 6px',
+                                        borderRadius: '8px'
+                                      }}>
+                                        投资: ¥{Number(member.investment_amount || 0).toFixed(0)}
+                                      </div>
+                                    )}
+                                    <div style={{ 
+                                      background: '#f6ffed',
+                                      color: '#52c41a',
+                                      padding: '2px 6px',
+                                      borderRadius: '8px'
+                                    }}>
+                                      贡献: {member.contribution_percentage || 0}%
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* 设置按钮 - 只有管理员和项目创建者才能看到 */}
+                                {hasAdminPermission(viewingProject) && (
+                                  <Dropdown
+                                    menu={{
+                                      items: [
+                                        {
+                                          key: 'view',
+                                          label: '查看信息',
+                                          icon: <InfoCircleOutlined />,
+                                          onClick: () => handleViewMemberInfo(member)
+                                        },
+                                        // 根据成员角色显示不同的管理员操作
+                                        ...(member.role === 'admin' ? [
+                                          {
+                                            key: 'remove-admin',
+                                            label: '解除管理员',
+                                            icon: <CrownOutlined />,
+                                            disabled: member.role === 'owner',
+                                            onClick: () => handleRemoveAdmin(member)
+                                          }
+                                        ] : [
+                                          {
+                                            key: 'set-admin',
+                                            label: '设置管理员',
+                                            icon: <CrownOutlined />,
+                                            disabled: member.role === 'owner',
+                                            onClick: () => handleSetAdmin(member)
+                                          }
+                                        ]),
+                                        {
+                                          type: 'divider'
+                                        },
+                                        {
+                                          key: 'delete',
+                                          label: '删除成员',
+                                          icon: <DeleteOutlined />,
+                                          danger: true,
+                                          disabled: member.role === 'owner' || member.user === user?.id,
+                                          onClick: () => handleDeleteMember(member)
+                                        }
+                                      ]
+                                    }}
+                                    trigger={['click']}
+                                    placement="bottomRight"
+                                  >
+                                    <Button 
+                                      type="text" 
+                                      size="small"
+                                      icon={<SettingOutlined />}
+                                      style={{
+                                        color: '#8c8c8c',
+                                        border: '1px solid #d9d9d9',
+                                        borderRadius: '6px',
+                                        height: '28px',
+                                        width: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}
+                                    />
+                                  </Dropdown>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </Space>
+                    ) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '40px 20px',
+                        color: '#6c757d'
+                      }}>
+                        <CrownOutlined style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }} />
+                        <div style={{ fontSize: '16px', marginBottom: '8px' }}>暂无股东成员</div>
+                        <div style={{ fontSize: '12px' }}>拥有股权的成员将显示在此处</div>
+                      </div>
+                    )}
                   </Card>
                 </Col>
               </Row>
@@ -1530,27 +1987,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
               <ProjectTasks 
                 projectId={viewingProject.id} 
                 project={viewingProject} 
-                isProjectOwner={isProjectOwner(viewingProject)}
+                isProjectOwner={hasAdminPermission(viewingProject)}
               />
-            </Tabs.TabPane>
-            
-            <Tabs.TabPane tab="团队管理" key="team">
-              {/* 合并功分系统、团队评估、成员招募 */}
-              <Tabs defaultActiveKey="merit" type="card">
-                <Tabs.TabPane tab="功分系统" key="merit">
-                  <Merit projectId={viewingProject.id} />
-                </Tabs.TabPane>
-                <Tabs.TabPane tab="团队评估" key="evaluation">
-                  <ProjectTeamEvaluation
-                    projectId={viewingProject.id} 
-                    project={viewingProject} 
-                    isProjectOwner={isProjectOwner(viewingProject)} 
-                  />
-                </Tabs.TabPane>
-                <Tabs.TabPane tab="成员招募" key="recruitment">
-                  <MemberRecruitment projectId={viewingProject.id} isProjectOwner={isProjectOwner(viewingProject)} />
-                </Tabs.TabPane>
-              </Tabs>
             </Tabs.TabPane>
             
             <Tabs.TabPane tab="数据分析" key="analytics">
@@ -1560,11 +1998,11 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                   <ProjectAnalytics
                     projectId={viewingProject.id} 
                     project={viewingProject} 
-                    isProjectOwner={isProjectOwner(viewingProject)} 
+                    isProjectOwner={hasAdminPermission(viewingProject)} 
                   />
                 </Tabs.TabPane>
                 <Tabs.TabPane tab="收益管理" key="revenue">
-                  <ProjectRevenue projectId={viewingProject.id} isProjectOwner={isProjectOwner(viewingProject)} />
+                  <ProjectRevenue projectId={viewingProject.id} isProjectOwner={hasAdminPermission(viewingProject)} />
                 </Tabs.TabPane>
               </Tabs>
             </Tabs.TabPane>
@@ -1655,6 +2093,157 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
             <p>然后输入此邀请码加入项目</p>
           </div>
         </div>
+      </Modal>
+
+      {/* 成员信息查看Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <UserOutlined style={{ color: '#1890ff' }} />
+            <span>成员信息</span>
+          </div>
+        }
+        open={isMemberInfoModalVisible}
+        onCancel={() => setIsMemberInfoModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setIsMemberInfoModalVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={600}
+      >
+        {selectedMember && (
+          <div>
+            {/* 成员基本信息 */}
+            <div style={{
+              background: '#f8f9fa',
+              borderRadius: 12,
+              padding: 20,
+              marginBottom: 20,
+              border: '1px solid #e9ecef'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                <Avatar 
+                  size={60} 
+                  icon={<UserOutlined />}
+                  style={{ 
+                    backgroundColor: '#52c41a',
+                    border: '3px solid #fff',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}
+                />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#262626' }}>
+                    {selectedMember.user_name}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <Tag color="blue">项目成员</Tag>
+                    {selectedMember.role === 'owner' && <Tag color="gold">项目负责人</Tag>}
+                    {selectedMember.role === 'admin' && <Tag color="purple">管理员</Tag>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 详细信息 */}
+            <Row gutter={[16, 16]}>
+              <Col span={12}>
+                <div style={{
+                  background: '#f6ffed',
+                  borderRadius: 8,
+                  padding: 16,
+                  border: '1px solid #b7eb8f'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ color: '#52c41a', fontSize: 16 }}>📊</span>
+                    <Text strong style={{ fontSize: 14, color: '#262626' }}>
+                      贡献比例
+                    </Text>
+                  </div>
+                  <Text style={{ fontSize: 20, fontWeight: 600, color: '#52c41a' }}>
+                    {selectedMember.contribution_percentage || 0}%
+                  </Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{
+                  background: '#fff7e6',
+                  borderRadius: 8,
+                  padding: 16,
+                  border: '1px solid #ffd591'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ color: '#fa8c16', fontSize: 16 }}>💰</span>
+                    <Text strong style={{ fontSize: 14, color: '#262626' }}>
+                      股权比例
+                    </Text>
+                  </div>
+                  <Text style={{ fontSize: 20, fontWeight: 600, color: '#fa8c16' }}>
+                    {Number(selectedMember.equity_percentage || 0).toFixed(2)}%
+                  </Text>
+                </div>
+              </Col>
+            </Row>
+
+            {Number(selectedMember.investment_amount || 0) > 0 && (
+              <div style={{
+                background: '#e6f7ff',
+                borderRadius: 8,
+                padding: 16,
+                marginTop: 16,
+                border: '1px solid #91d5ff'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#1890ff', fontSize: 16 }}>💵</span>
+                  <Text strong style={{ fontSize: 14, color: '#262626' }}>
+                    投资金额
+                  </Text>
+                </div>
+                <Text style={{ fontSize: 18, fontWeight: 600, color: '#1890ff' }}>
+                  ¥{Number(selectedMember.investment_amount || 0).toFixed(2)}
+                </Text>
+              </div>
+            )}
+
+            {selectedMember.contribution_description && (
+              <div style={{
+                background: '#fafafa',
+                borderRadius: 8,
+                padding: 16,
+                marginTop: 16,
+                border: '1px solid #f0f0f0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#8c8c8c', fontSize: 16 }}>📝</span>
+                  <Text strong style={{ fontSize: 14, color: '#262626' }}>
+                    贡献描述
+                  </Text>
+                </div>
+                <Text style={{ fontSize: 14, color: '#595959', lineHeight: 1.6 }}>
+                  {selectedMember.contribution_description}
+                </Text>
+              </div>
+            )}
+
+            <div style={{
+              background: '#fafafa',
+              borderRadius: 8,
+              padding: 16,
+              marginTop: 16,
+              border: '1px solid #f0f0f0'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ color: '#8c8c8c', fontSize: 16 }}>🕒</span>
+                <Text strong style={{ fontSize: 14, color: '#262626' }}>
+                  加入时间
+                </Text>
+              </div>
+              <Text style={{ fontSize: 14, color: '#595959' }}>
+                {selectedMember.join_date ? new Date(selectedMember.join_date).toLocaleString() : '未知'}
+              </Text>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
