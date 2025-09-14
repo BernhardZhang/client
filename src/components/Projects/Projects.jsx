@@ -102,15 +102,23 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     
     try {
       setIsPublicProject(checked);
-      // 这里可以调用API更新项目的公开状态
-      // await projectsAPI.updateProjectPublicStatus(viewingProject.id, checked);
-      message.success(checked ? '项目已设为公开，将在项目大厅显示' : '项目已设为私有');
       
-      // 更新本地项目数据
-      setViewingProject({
-        ...viewingProject,
+      // 调用API更新项目的公开状态 - 使用patch请求只更新is_public字段
+      const response = await api.patch(`/projects/${viewingProject.id}/`, {
         is_public: checked
       });
+      
+      if (response.status === 200) {
+        message.success(checked ? '项目已设为公开，将在项目大厅显示' : '项目已设为私有');
+        
+        // 更新本地项目数据
+        setViewingProject({
+          ...viewingProject,
+          is_public: checked
+        });
+      } else {
+        throw new Error('更新失败');
+      }
     } catch (error) {
       console.error('更新项目公开状态失败:', error);
       message.error('更新项目公开状态失败');

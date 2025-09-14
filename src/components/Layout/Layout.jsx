@@ -53,7 +53,7 @@ const Layout = () => {
       label: '任务管理',
     },
     {
-      key: '/task-hall',
+        key: '/project-hall',
       icon: <ShopOutlined />,
       label: '项目大厅',
     },

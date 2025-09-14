@@ -59,6 +59,7 @@ import dayjs from 'dayjs';
 import LoginPrompt from '../Auth/LoginPrompt';
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
+import api from '../../services/api';
 import './ProjectHall.css';
 
 const { Title, Text, Paragraph } = Typography;
@@ -94,11 +95,13 @@ const ProjectHall = () => {
   const fetchPublicProjects = async (page = 1, pageSize = 12) => {
     setLoading(true);
     try {
-      await fetchProjects();
-      // 这里可以从API获取公开项目，暂时使用本地数据
-      const allProjects = await fetchProjects();
-      const publicProjects = allProjects.filter(project => project.is_public);
+      // 直接调用后端的公开项目API
+      console.log('Fetching public projects from API...');
+      const response = await api.get('/projects/public/');
+      console.log('Public projects response:', response.data);
+      const publicProjects = response.data.results || response.data || [];
       
+      console.log('Found public projects:', publicProjects.length);
       setProjects(publicProjects);
       setPagination(prev => ({
         ...prev,
@@ -106,8 +109,8 @@ const ProjectHall = () => {
         total: publicProjects.length
       }));
     } catch (error) {
-      message.error('获取项目数据失败');
-      console.error('获取项目数据失败:', error);
+      console.error('Error fetching public projects:', error);
+      message.error('获取公开项目数据失败');
     } finally {
       setLoading(false);
     }
@@ -116,6 +119,11 @@ const ProjectHall = () => {
   useEffect(() => {
     fetchPublicProjects();
   }, []);
+
+  // 添加一个刷新公开项目的处理函数
+  const handleRefreshProjects = () => {
+    fetchPublicProjects();
+  };
 
   const handleLoginRequired = () => {
     setShowLoginPrompt(true);
@@ -151,11 +159,6 @@ const ProjectHall = () => {
     {
       key: '/project-hall',
       icon: <AppstoreOutlined />,
-      label: '项目大厅',
-    },
-    {
-      key: '/task-hall',
-      icon: <CheckCircleOutlined />,
       label: '项目大厅',
     },
     {
@@ -434,14 +437,19 @@ const ProjectHall = () => {
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
-          borderBottom: '1px solid #f0f0f0'
+          borderBottom: '1px solid #303030'
         }}>
-          <Text strong style={{ color: '#1890ff' }}>
-            {collapsed ? 'PH' : '项目大厅'}
+          <Text strong style={{ 
+            fontSize: collapsed ? '16px' : '18px', 
+            color: '#fff',
+            whiteSpace: 'nowrap'
+          }}>
+            {collapsed ? '功分' : '功分易'}
           </Text>
         </div>
         
         <Menu
+          theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={mainNavItems}
@@ -449,9 +457,10 @@ const ProjectHall = () => {
           className="nav-menu"
         />
         
-        <Divider style={{ margin: '8px 0' }} />
+        <Divider style={{ margin: '16px 0', borderColor: '#303030' }} />
         
         <Menu
+          theme="dark"
           mode="inline"
           items={functionItems}
           onClick={handleMenuClick}
@@ -461,41 +470,54 @@ const ProjectHall = () => {
         {/* 用户信息区域 */}
         <div className="user-info-area">
           {isAuthenticated() ? (
-            <Space direction="vertical" size="small">
-              <Space>
-                <Avatar size="small" src={user?.avatar} />
-                <Text strong>{user?.username}</Text>
-              </Space>
-              <Button 
-                type="link" 
-                size="small" 
-                icon={<LogoutOutlined />}
-                onClick={handleLogout}
-              >
-                退出登录
-              </Button>
-            </Space>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" src={user?.avatar} icon={<UserOutlined />} />
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#fff', fontSize: '12px' }} ellipsis>
+                    {user?.username}
+                  </Text>
+                  <div>
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      icon={<LogoutOutlined />}
+                      onClick={handleLogout}
+                      style={{ color: '#fff', padding: 0, height: 'auto' }}
+                    >
+                      {!collapsed && '退出'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
-            <Space direction="vertical" size="small">
-              <Text type="secondary">游客模式</Text>
-              <Button 
-                type="primary" 
-                size="small" 
-                icon={<LoginOutlined />}
-                onClick={handleLoginRequired}
-              >
-                登录
-              </Button>
-            </Space>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small" icon={<UserOutlined />} />
+              {!collapsed && (
+                <div>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<LoginOutlined />}
+                    onClick={handleLoginRequired}
+                    style={{ color: '#fff', padding: 0, height: 'auto' }}
+                  >
+                    登录
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </Sider>
 
       {/* 右侧内容区域 */}
-      <Content className="right-content" style={{ 
-        padding: '24px', 
-        overflow: 'auto'
-      }}>
+      <Layout>
+        <Content className="right-content" style={{ 
+          padding: '24px', 
+          overflow: 'auto'
+        }}>
         {/* 顶部标题和搜索 */}
         <div style={{ marginBottom: '24px' }}>
           <Row justify="space-between" align="middle" style={{ marginBottom: '16px' }}>
@@ -620,7 +642,8 @@ const ProjectHall = () => {
             />
           )}
         </Card>
-      </Content>
+        </Content>
+      </Layout>
       
       <LoginPrompt
         visible={showLoginPrompt}

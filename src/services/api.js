@@ -208,7 +208,10 @@ export const wislabApi = {
     api.put(`/projects/wislab-projects/${id}/`, projectData),
   deleteProject: (id) =>
     api.delete(`/projects/wislab-projects/${id}/`),
-  
+    // 项目大厅相关
+    getProjectHall: (params) =>
+        api.get('/projects/hall/', { params }),
+
   // 任务管理
   getProjectTasks: (projectId) =>
     api.get(`/projects/tasks/`, { params: { project: projectId } }),
@@ -272,10 +275,7 @@ export const tasksAPI = {
     api.get('/tasks/summary/'),
   getUserScoreSummary: () =>
     api.get('/tasks/score-summary/'),
-  
-  // 项目大厅相关
-  getTaskHall: (params) =>
-    api.get('/tasks/hall/', { params }),
+
   claimTask: (taskId) =>
     api.post(`/tasks/${taskId}/claim/`),
     

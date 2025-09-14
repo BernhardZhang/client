@@ -7,7 +7,7 @@ import IntegratedProjectManagement from './components/Projects/IntegratedProject
 import Points from './components/Points/Points';
 import Finance from './components/Finance/Finance';
 import Merit from './components/Merit/Merit';
-import TaskHall from './components/Tasks/TaskHall';
+import ProjectHall from './components/Projects/ProjectHall';
 import ProjectTasksPage from './components/Projects/ProjectTasksPage';
 import DataAnalysis from './components/Analysis/DataAnalysis';
 import PublicHome from './components/Public/PublicHome';
@@ -44,10 +44,7 @@ function App() {
               <Route path="/projects" element={<IntegratedProjectManagement />} />
               
               {/* 项目大厅页面使用新的左中右布局 */}
-              <Route path="/task-hall" element={<TaskHall />} />
-              
-              {/* 项目大厅页面使用新的左中右布局 */}
-              <Route path="/project-hall" element={<TaskHall />} />
+              <Route path="/project-hall" element={<ProjectHall />} />
               
               {/* 积分系统页面使用新的左中右布局 */}
               <Route path="/points" element={<Points />} />

@@ -148,7 +148,7 @@ const PublicHome = () => {
       label: '项目管理',
     },
     {
-      key: '/task-hall',
+        key: '/project-hall',
       icon: <AppstoreOutlined />,
       label: '项目大厅',
     },
