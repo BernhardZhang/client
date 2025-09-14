@@ -28,10 +28,13 @@ import {
   SettingOutlined,
   BulbOutlined,
   ExclamationCircleOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
+import { projectsAPI } from '../../services/api';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
+import './ProjectLogs.css';
 
 dayjs.extend(relativeTime);
 dayjs.locale('zh-cn');
@@ -59,17 +62,15 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/logs/?page=${pageNum}&page_size=20`);
-      const data = await response.json();
+      const response = await projectsAPI.getProjectLogs(projectId, {
+        page: pageNum,
+        page_size: 20
+      });
       
-      if (response.ok) {
-        const newLogs = data.results || [];
-        setLogs(reset ? newLogs : [...logs, ...newLogs]);
-        setHasMore(data.has_more || false);
-        setPage(pageNum);
-      } else {
-        message.error(data.error || '获取项目日志失败');
-      }
+      const newLogs = response.data.results || response.data.logs || [];
+      setLogs(reset ? newLogs : [...logs, ...newLogs]);
+      setHasMore(response.data.has_more || false);
+      setPage(pageNum);
     } catch (error) {
       console.error('Error fetching logs:', error);
       message.error('获取项目日志失败');
@@ -86,25 +87,12 @@ const ProjectLogs = ({ projectId, showTitle = true, maxHeight = 500 }) => {
 
   const handleCreateLog = async (values) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/logs/create/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        message.success('日志创建成功');
-        setIsModalVisible(false);
-        form.resetFields();
-        // 重新加载日志列表
-        fetchLogs(1, true);
-      } else {
-        message.error(data.error || '创建日志失败');
-      }
+      await projectsAPI.createProjectLog(projectId, values);
+      message.success('日志创建成功');
+      setIsModalVisible(false);
+      form.resetFields();
+      // 重新加载日志列表
+      fetchLogs(1, true);
     } catch (error) {
       console.error('Error creating log:', error);
       message.error('创建日志失败');

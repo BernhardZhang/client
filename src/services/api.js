@@ -116,6 +116,14 @@ export const projectsAPI = {
     api.post(`/projects/${projectId}/join/`),
   leaveProject: (projectId) =>
     api.post(`/projects/${projectId}/leave/`),
+  
+  // 项目日志相关API
+  getProjectLogs: (projectId, params = {}) =>
+    api.get(`/projects/${projectId}/logs/`, { params }),
+  createProjectLog: (projectId, logData) =>
+    api.post(`/projects/${projectId}/logs/create/`, logData),
+  getProjectLogTypes: () =>
+    api.get('/projects/log-types/'),
 };
 
 // Voting API
