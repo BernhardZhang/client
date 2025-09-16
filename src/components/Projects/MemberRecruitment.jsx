@@ -388,30 +388,12 @@ const MemberRecruitment = ({ projectId, isProjectOwner }) => {
             <>
               <Popconfirm
                 title="批准申请"
-                description="请输入分配的股份比例"
+                description="确定要批准这个申请吗？将分配默认股份比例。"
                 onConfirm={() => {
-                  Modal.confirm({
-                    title: '批准申请',
-                    content: (
-                      <Form layout="vertical">
-                        <Form.Item label="股份比例 (%)" name="equity">
-                          <InputNumber min={0} max={100} placeholder="输入股份比例" />
-                        </Form.Item>
-                        <Form.Item label="角色" name="role">
-                          <Select defaultValue="member">
-                            <Option value="member">普通成员</Option>
-                            <Option value="admin">管理员</Option>
-                          </Select>
-                        </Form.Item>
-                      </Form>
-                    ),
-                    onOk: (close) => {
-                      const equity = document.querySelector('input[placeholder="输入股份比例"]')?.value || 0;
-                      const role = 'member'; // 简化处理
-                      handleApproveApplication(record.id, equity, role);
-                      close();
-                    }
-                  });
+                  // 使用默认值批准申请
+                  const equity = 0; // 默认股份比例
+                  const role = 'member'; // 默认角色
+                  handleApproveApplication(record.id, equity, role);
                 }}
               >
                 <Button type="primary" size="small" icon={<CheckOutlined />}>

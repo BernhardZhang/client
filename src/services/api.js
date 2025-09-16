@@ -172,6 +172,43 @@ export const votingAPI = {
     api.delete(`/voting/self-evaluations/${evaluationId}/`),
 };
 
+// Rating API - 更新为voting路径
+export const ratingAPI = {
+  // 评分活动管理
+  getRatingSessions: (projectId) =>
+    api.get('/voting/rating-sessions/', { params: { project: projectId } }),
+  createRatingSession: (sessionData) =>
+    api.post('/voting/rating-sessions/', sessionData),
+  getRatingSession: (sessionId) =>
+    api.get(`/voting/rating-sessions/${sessionId}/`),
+  updateRatingSession: (sessionId, sessionData) =>
+    api.put(`/voting/rating-sessions/${sessionId}/`, sessionData),
+  deleteRatingSession: (sessionId) =>
+    api.delete(`/voting/rating-sessions/${sessionId}/`),
+  endRatingSession: (sessionId) =>
+    api.post(`/voting/rating-sessions/${sessionId}/end/`),
+
+  // 评分记录管理
+  getRatings: (sessionId) =>
+    api.get('/voting/ratings/', { params: { session: sessionId } }),
+  createRating: (ratingData) =>
+    api.post('/voting/ratings/', ratingData),
+  getRating: (ratingId) =>
+    api.get(`/voting/ratings/${ratingId}/`),
+  updateRating: (ratingId, ratingData) =>
+    api.put(`/voting/ratings/${ratingId}/`, ratingData),
+  deleteRating: (ratingId) =>
+    api.delete(`/voting/ratings/${ratingId}/`),
+
+  // 获取我的评分记录
+  getMyRatings: (sessionId) =>
+    api.get('/voting/ratings/my/', { params: { session: sessionId } }),
+
+  // 评分结果统计
+  getRatingResults: (sessionId) =>
+    api.get(`/voting/rating-sessions/${sessionId}/results/`),
+};
+
 // Finance API
 export const financeAPI = {
   getReports: (votingRound, showAll = false) =>

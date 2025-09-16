@@ -28,6 +28,7 @@ import {
   Switch,
   Upload,
   Slider,
+  App,
 } from 'antd';
 import {
   PlusOutlined,
@@ -58,7 +59,7 @@ import useProjectStore from '../../stores/projectStore';
 import ProjectLogs from './ProjectLogs';
 import ProjectRevenue from './ProjectRevenue';
 import ProjectAnalytics from './ProjectAnalytics';
-import ProjectTasks from './ProjectTasks';
+import Tasks from '../Tasks/Tasks';
 import ProjectCardGrid from './ProjectCardGrid';
 import Voting from '../Voting/Voting';
 import api from '../../services/api';
@@ -76,6 +77,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
   const [editingProject, setEditingProject] = useState(null);
   const [viewingProject, setViewingProject] = useState(null);
   const [isPublicProject, setIsPublicProject] = useState(false); // 公开项目开关状态
+  const { modal } = App.useApp();
   // 使用传入的activeTab，如果没有传入则使用默认值
   const internalActiveTab = activeTab || 'all';
   // 使用传入的排序参数，如果没有传入则使用默认值
@@ -348,32 +350,32 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
   // 处理设置管理员
   const handleSetAdmin = async (member) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认设置管理员权限',
       content: `确定要将 ${member.user_name} 设置为管理员吗？管理员将拥有项目的管理权限。`,
-      icon: <CrownOutlined style={{ color: '#1890ff' }} />,
       okText: '确认设置',
       cancelText: '取消',
       onOk: async () => {
         try {
-          // 这里应该调用API设置管理员
-          console.log('设置管理员:', member);
-          
-          // 更新本地状态，将成员角色设置为admin
-          if (viewingProject && viewingProject.members_detail) {
-            const updatedMembers = viewingProject.members_detail.map(m => 
-              m.user === member.user ? { ...m, role: 'admin' } : m
-            );
-            setViewingProject({
-              ...viewingProject,
-              members_detail: updatedMembers
-            });
+          // 调用API设置管理员
+          const response = await api.post(`/projects/${viewingProject.id}/members/${member.user}/set-admin/`);
+
+          if (response.status === 200) {
+            // 更新本地状态，将成员角色设置为admin
+            if (viewingProject && viewingProject.members_detail) {
+              const updatedMembers = viewingProject.members_detail.map(m =>
+                m.user === member.user ? { ...m, role: 'admin' } : m
+              );
+              setViewingProject({
+                ...viewingProject,
+                members_detail: updatedMembers
+              });
+            }
+            message.success(`已将 ${member.user_name} 设置为管理员`);
           }
-          
-          message.success(`已将 ${member.user_name} 设置为管理员`);
         } catch (error) {
           console.error('设置管理员失败:', error);
-          message.error('设置管理员失败');
+          message.error(error.response?.data?.error || '设置管理员失败');
         }
       }
     });
@@ -381,33 +383,33 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
   // 处理解除管理员
   const handleRemoveAdmin = async (member) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认解除管理员权限',
       content: `确定要解除 ${member.user_name} 的管理员权限吗？解除后该成员将变为普通成员。`,
-      icon: <CrownOutlined style={{ color: '#fa8c16' }} />,
       okText: '确认解除',
       cancelText: '取消',
       okType: 'danger',
       onOk: async () => {
         try {
-          // 这里应该调用API解除管理员
-          console.log('解除管理员:', member);
-          
-          // 更新本地状态，将成员角色设置为member
-          if (viewingProject && viewingProject.members_detail) {
-            const updatedMembers = viewingProject.members_detail.map(m => 
-              m.user === member.user ? { ...m, role: 'member' } : m
-            );
-            setViewingProject({
-              ...viewingProject,
-              members_detail: updatedMembers
-            });
+          // 调用API解除管理员
+          const response = await api.post(`/projects/${viewingProject.id}/members/${member.user}/remove-admin/`);
+
+          if (response.status === 200) {
+            // 更新本地状态，将成员角色设置为member
+            if (viewingProject && viewingProject.members_detail) {
+              const updatedMembers = viewingProject.members_detail.map(m =>
+                m.user === member.user ? { ...m, role: 'member' } : m
+              );
+              setViewingProject({
+                ...viewingProject,
+                members_detail: updatedMembers
+              });
+            }
+            message.success(`已解除 ${member.user_name} 的管理员权限`);
           }
-          
-          message.success(`已解除 ${member.user_name} 的管理员权限`);
         } catch (error) {
           console.error('解除管理员失败:', error);
-          message.error('解除管理员失败');
+          message.error(error.response?.data?.error || '解除管理员失败');
         }
       }
     });
@@ -415,14 +417,46 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
   // 处理删除成员
   const handleDeleteMember = async (member) => {
-    try {
-      // 这里应该调用API删除成员
-      console.log('删除成员:', member);
-      message.success(`已删除成员 ${member.user_name}`);
-      setIsMemberSettingsModalVisible(false);
-    } catch (error) {
-      console.error('删除成员失败:', error);
-      message.error('删除成员失败');
+    modal.confirm({
+      title: '确认删除成员',
+      content: `确定要删除成员 ${member.user_name} 吗？删除后该成员将无法访问此项目。`,
+      okText: '确认删除',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          // 调用API删除成员
+          const response = await api.delete(`/projects/${viewingProject.id}/members/${member.user}/remove/`);
+
+          if (response.status === 200) {
+            // 更新本地状态，移除该成员
+            if (viewingProject && viewingProject.members_detail) {
+              const updatedMembers = viewingProject.members_detail.filter(m => m.user !== member.user);
+              setViewingProject({
+                ...viewingProject,
+                members_detail: updatedMembers,
+                members_count: viewingProject.members_count - 1
+              });
+            }
+            message.success(`已删除成员 ${member.user_name}`);
+            setIsMemberSettingsModalVisible(false);
+          }
+        } catch (error) {
+          console.error('删除成员失败:', error);
+          message.error(error.response?.data?.error || '删除成员失败');
+        }
+      }
+    });
+  };
+
+  // 获取进度条颜色的函数
+  const getProgressColor = (progress) => {
+    if (progress === 0) {
+      return '#faad14'; // 黄色
+    } else if (progress === 100) {
+      return '#1890ff'; // 蓝色
+    } else {
+      return '#52c41a'; // 绿色 (进行中)
     }
   };
 
@@ -1003,9 +1037,10 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
       key: 'progress',
       render: (progress = 0, record) => (
         <Space direction="vertical" size="small">
-          <Progress 
-            percent={progress} 
-            size="small" 
+          <Progress
+            percent={progress}
+            size="small"
+            strokeColor={getProgressColor(progress)}
             status={progress === 100 ? 'success' : 'active'}
           />
           {record.task_count && (
@@ -1084,7 +1119,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
             case 'delete':
               console.log('表格删除按钮被点击，项目ID:', record.id);
               console.log('handleDeleteProject函数:', handleDeleteProject);
-              Modal.confirm({
+              modal.confirm({
                 title: '确定要删除这个项目吗？',
                 content: `项目"${record.name}"将被永久删除，此操作不可撤销。`,
                 okText: '确定删除',
@@ -1511,13 +1546,10 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                           <BarChartOutlined style={{ color: '#6c757d' }} />
                           <Text strong style={{ color: '#495057' }}>项目进度</Text>
                         </div>
-                        <Progress 
-                          percent={viewingProject.progress || 0} 
-                          size="small" 
-                          strokeColor={{
-                            '0%': '#108ee9',
-                            '100%': '#87d068',
-                          }}
+                        <Progress
+                          percent={viewingProject.progress || 0}
+                          size="small"
+                          strokeColor={getProgressColor(viewingProject.progress || 0)}
                           style={{ marginBottom: '8px' }}
                         />
                         <div style={{ textAlign: 'center', color: '#6c757d', fontSize: '12px' }}>
@@ -1992,7 +2024,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
             </Tabs.TabPane>
             
             <Tabs.TabPane tab="任务管理" key="tasks">
-              <ProjectTasks 
+              <Tasks 
                 projectId={viewingProject.id} 
                 project={viewingProject} 
                 isProjectOwner={hasAdminPermission(viewingProject)}

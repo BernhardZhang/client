@@ -46,7 +46,7 @@ const useVotingStore = create((set, get) => ({
     }
   },
   
-  fetchMyVotes: async (votingRound) => {
+  fetchMyVotes: async (votingRound = null) => {
     try {
       const response = await votingAPI.getMyVotes(votingRound);
       set({ myVotes: Array.isArray(response.data) ? response.data : [] });
@@ -55,8 +55,8 @@ const useVotingStore = create((set, get) => ({
       set({ myVotes: [] });
     }
   },
-  
-  fetchVotesReceived: async (votingRound) => {
+
+  fetchVotesReceived: async (votingRound = null) => {
     try {
       const response = await votingAPI.getVotesReceived(votingRound);
       set({ votesReceived: Array.isArray(response.data) ? response.data : [] });
@@ -69,16 +69,14 @@ const useVotingStore = create((set, get) => ({
   createVote: async (voteData) => {
     try {
       const response = await votingAPI.createVote(voteData);
-      // Refresh votes data
-      if (voteData.voting_round) {
-        get().fetchMyVotes(voteData.voting_round);
-        get().fetchVotes(voteData.voting_round);
-      }
+      // Refresh votes data (no longer require voting_round)
+      get().fetchMyVotes();
+      get().fetchVotes();
       return { success: true, vote: response.data };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data || '投票失败' 
+      return {
+        success: false,
+        error: error.response?.data || '投票失败'
       };
     }
   },

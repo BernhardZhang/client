@@ -34,7 +34,7 @@ import RegisterDialog from '../Auth/RegisterDialog';
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
 import useVotingStore from '../../stores/votingStore';
-import { authAPI } from '../../services/api';
+import { authAPI, ratingAPI } from '../../services/api';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -46,14 +46,130 @@ const Voting = ({ projectId }) => {
   const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [registerModalVisible, setRegisterModalVisible] = useState(false);
   const [allUsers, setAllUsers] = useState({});
-  const [selectedVoteType, setSelectedVoteType] = useState('');
-  const [selectedProject, setSelectedProject] = useState('');
-  const [localVotes, setLocalVotes] = useState([]);
   const [isParticipateModalVisible, setIsParticipateModalVisible] = useState(false);
   const [currentVote, setCurrentVote] = useState(null);
   const [participateForm] = Form.useForm();
   const [isResultModalVisible, setIsResultModalVisible] = useState(false);
   const [voteResults, setVoteResults] = useState(null);
+  const [ratingSessions, setRatingSessions] = useState([]);
+  const [selectedVoteType, setSelectedVoteType] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [currentTotalScore, setCurrentTotalScore] = useState(0);
+  const [userParticipatedSessions, setUserParticipatedSessions] = useState(new Set());
+
+  // 通用错误处理函数
+  const getErrorMessage = (error, defaultMessage) => {
+    console.log('Error details:', error);
+
+    try {
+      // 首先检查是否有响应
+      if (error.response) {
+        console.log('有错误响应:', error.response);
+        console.log('响应状态:', error.response.status);
+        console.log('响应数据:', error.response.data);
+        console.log('响应数据类型:', typeof error.response.data);
+
+        const data = error.response.data;
+
+        // 如果data是字符串
+        if (typeof data === 'string') {
+          try {
+            // 尝试解析JSON
+            const parsed = JSON.parse(data);
+            if (parsed.error) return parsed.error;
+            if (parsed.message) return parsed.message;
+            if (parsed.detail) return parsed.detail;
+          } catch (e) {
+            // 如果不是JSON，直接返回字符串
+            return data;
+          }
+        }
+
+        // 如果data是对象
+        if (data && typeof data === 'object') {
+          if (data.error) return data.error;
+          if (data.message) return data.message;
+          if (data.detail) return data.detail;
+          if (data.non_field_errors) {
+            return Array.isArray(data.non_field_errors)
+              ? data.non_field_errors.join(', ')
+              : data.non_field_errors;
+          }
+
+          // 检查其他可能的错误字段
+          for (const key of Object.keys(data)) {
+            if (typeof data[key] === 'string' && data[key].length > 0) {
+              return data[key];
+            }
+            if (Array.isArray(data[key]) && data[key].length > 0) {
+              return data[key].join(', ');
+            }
+          }
+        }
+      }
+
+      // 检查error.message
+      if (error.message) {
+        return error.message;
+      }
+
+    } catch (e) {
+      console.error('处理错误时出错:', e);
+    }
+
+    return defaultMessage;
+  };
+
+  // 获取我的评分活动
+  const fetchMyRatingSessions = async () => {
+    if (!projectId) return;
+
+    try {
+      const response = await ratingAPI.getRatingSessions(projectId);
+      const sessions = response.data.results || response.data || [];
+      setRatingSessions(sessions);
+
+      // 获取用户已参与的评分活动
+      await checkUserParticipation(sessions);
+    } catch (error) {
+      console.error('获取评分活动失败:', error);
+      setRatingSessions([]);
+    }
+  };
+
+  // 检查用户参与状态
+  const checkUserParticipation = async (sessions) => {
+    if (!user?.id || sessions.length === 0) return;
+
+    try {
+      const participatedSet = new Set();
+
+      // 对每个会话检查用户是否已提交评分
+      for (const session of sessions) {
+        try {
+          const response = await ratingAPI.getMyRatings(session.id);
+          const myRatings = response.data.results || response.data || [];
+
+          // 如果用户在这个会话中有评分记录，标记为已参与
+          if (myRatings.length > 0) {
+            participatedSet.add(session.id);
+          }
+        } catch (error) {
+          // 忽略获取个人评分的错误，继续检查其他会话
+          console.log(`检查会话 ${session.id} 参与状态失败:`, error);
+        }
+      }
+
+      setUserParticipatedSessions(participatedSet);
+    } catch (error) {
+      console.error('检查用户参与状态失败:', error);
+    }
+  };
+
+  // 检查用户是否已参与某个投票活动
+  const hasUserParticipated = (sessionId) => {
+    return userParticipatedSessions.has(sessionId);
+  };
   
   const { user, isAuthenticated } = useAuthStore();
   const { projects, fetchProjects } = useProjectStore();
@@ -67,13 +183,16 @@ const Voting = ({ projectId }) => {
   useEffect(() => {
     fetchProjects();
     loadUsers();
-    
-    // 如果在项目页面，设置默认值
+
+    // 如果在项目页面，设置默认值并获取评分活动
     if (projectId) {
       setSelectedVoteType('project');
       setSelectedProject(projectId);
+      if (user) {
+        fetchMyRatingSessions();
+      }
     }
-  }, [projectId]);
+  }, [projectId, user]);
 
   useEffect(() => {
     fetchMyVotes();
@@ -92,10 +211,10 @@ const Voting = ({ projectId }) => {
 
   const handleCreateVote = async () => {
     try {
-      console.log('开始创建投票...');
+      console.log('开始创建评分活动...');
       const values = await form.validateFields();
       console.log('表单验证通过，表单值:', values);
-      
+
       // 检查必要字段
       if (!values.title) {
         message.error('请输入评分标题！');
@@ -109,58 +228,35 @@ const Voting = ({ projectId }) => {
         message.error('请选择评分人员！');
         return;
       }
-      
-      // 构建投票数据
-      const voteData = {
-        title: values.title,
+
+      // 构建评分活动数据
+      const sessionData = {
+        project: projectId,
+        theme: values.title,
         description: values.description,
-        evaluators: values.evaluators,
-        vote_type: 'project',
-        target_project: projectId,
-        target_user: null,
-        participant_count: values.evaluators ? values.evaluators.length : 0
+        selected_members: values.evaluators
       };
-      
-      console.log('准备提交投票数据:', voteData);
-      
-      // 临时模拟创建投票成功，用于测试
-      const mockResult = {
-        success: true,
-        data: {
-          id: Date.now(),
-          ...voteData,
-          created_at: new Date().toISOString(),
-          created_by: user?.id,
-          target_name: projects.find(p => p.id === projectId)?.name || '项目投票'
-        }
-      };
-      
-      console.log('模拟投票创建结果:', mockResult);
-      
-      // 临时使用模拟数据，实际应该调用 createVote(voteData)
-      // const result = await createVote(voteData);
-      const result = mockResult;
-      
-      if (result && result.success) {
-        message.success('投票创建成功！');
+
+      console.log('准备提交评分活动数据:', sessionData);
+
+      // 调用真实的API创建评分活动
+      const response = await ratingAPI.createRatingSession(sessionData);
+
+      if (response.status === 201) {
+        message.success('评分活动创建成功！');
         handleModalClose();
-        
-        // 将新创建的投票添加到本地状态中，立即显示
-        if (result.data) {
-          console.log('添加新投票到本地状态:', result.data);
-          setLocalVotes(prev => [...prev, result.data]);
-        }
-        
-        fetchMyVotes();
-      } else {
-        message.error(result?.error || '创建投票失败，请重试');
+
+        // 刷新数据
+        await fetchMyRatingSessions();
       }
     } catch (error) {
-      console.error('创建投票失败:', error);
-      if (error.errorFields) {
+      console.error('创建评分活动失败:', error);
+      if (error.response?.status === 403) {
+        message.error('只有项目负责人或管理员可以创建评分活动');
+      } else if (error.errorFields) {
         message.error('请检查表单填写是否完整');
       } else {
-        message.error('创建投票失败，请重试');
+        message.error(getErrorMessage(error, '创建评分活动失败，请重试'));
       }
     }
   };
@@ -175,47 +271,66 @@ const Voting = ({ projectId }) => {
 
 
   // 处理参与投票
-  const handleParticipateVote = (vote) => {
-    setCurrentVote(vote);
-    
-    // 获取参与成员信息
-    const currentProject = projects.find(p => p.id === vote.target_project);
-    const participants = currentProject?.members_detail || [];
-    
+  const handleParticipateVote = (session) => {
+    setCurrentVote(session);
+
+    // 获取参与成员信息 - 使用评分活动选定的成员，而不是所有项目成员
+    const currentProject = projects.find(p => p.id === session.project);
+    const allProjectMembers = currentProject?.members_detail || [];
+
+    // 根据session.selected_members过滤出真正的参与者
+    const participants = allProjectMembers.filter(member =>
+      session.selected_members && session.selected_members.includes(member.user)
+    );
+
     // 初始化表单，每个成员默认分值为0
     const initialValues = {};
     participants.forEach((member) => {
       initialValues[`score_${member.user}`] = 0;
     });
-    
+
     participateForm.setFieldsValue(initialValues);
+    setCurrentTotalScore(0); // 初始化总分为0
     setIsParticipateModalVisible(true);
   };
 
+  // 计算当前总分（包括给自己的评分）
+  const calculateCurrentTotalScore = () => {
+    const values = participateForm.getFieldsValue();
+    const totalScore = Object.values(values).reduce((sum, score) => sum + (score || 0), 0);
+    setCurrentTotalScore(totalScore);
+    return totalScore;
+  };
+
   // 处理查看投票结果
-  const handleViewVoteResults = (vote) => {
-    setCurrentVote(vote);
-    
+  const handleViewVoteResults = (session) => {
+    setCurrentVote(session);
+
     // 模拟投票数据，实际应该从API获取
-    const mockVoteData = generateMockVoteData(vote);
-    
+    const mockVoteData = generateMockVoteData(session);
+
     // 根据功分易功分互评方案计算最终结果
     const results = calculateVoteResults(mockVoteData);
-    
+
     setVoteResults(results);
     setIsResultModalVisible(true);
   };
 
   // 生成模拟投票数据
-  const generateMockVoteData = (vote) => {
-    const currentProject = projects.find(p => p.id === vote.target_project);
-    const participants = currentProject?.members_detail || [];
-    
+  const generateMockVoteData = (session) => {
+    const currentProject = projects.find(p => p.id === session.project);
+    const allProjectMembers = currentProject?.members_detail || [];
+
+    // 过滤出真正的参与者
+    const participants = allProjectMembers.filter(member =>
+      session.selected_members && session.selected_members.includes(member.user)
+    );
+
     // 模拟每个参与者的投票数据
     const voteData = participants.map(participant => {
       const scores = {};
       let totalScore = 0;
-      
+
       // 为每个参与者生成对其他人的评分
       participants.forEach(target => {
         if (target.user === participant.user) {
@@ -227,22 +342,22 @@ const Voting = ({ projectId }) => {
         }
         totalScore += scores[target.user];
       });
-      
+
       // 调整总分到100
       const adjustment = 100 - totalScore;
       const keys = Object.keys(scores);
       if (keys.length > 0) {
         scores[keys[0]] += adjustment;
       }
-      
+
       return {
         voter: participant,
         scores: scores
       };
     });
-    
+
     return {
-      vote: vote,
+      vote: session,
       participants: participants,
       voteData: voteData
     };
@@ -362,34 +477,55 @@ const Voting = ({ projectId }) => {
     };
   };
 
-  // 提交投票参与
+  // 提交评分参与
   const handleSubmitParticipation = async () => {
     try {
       const values = await participateForm.validateFields();
-      
-      // 验证总分是否为100
+
+      // 验证总分不能超过100分
       const totalScore = Object.values(values).reduce((sum, score) => sum + (score || 0), 0);
-      if (totalScore !== 100) {
-        message.error('总分必须为100分，请重新分配！');
+      if (totalScore > 100) {
+        message.error(`总分超出限制！当前总分为${totalScore}分，总分不能超过100分。`);
         return;
       }
-      
-      console.log('提交投票参与:', values);
-      
-      // 这里应该调用API提交投票数据
-      // const result = await submitVoteParticipation(currentVote.id, values);
-      
-      // 模拟提交成功
-      message.success('投票提交成功！');
+
+      console.log('提交评分参与:', values);
+
+      // 构建评分数据（包括给自己的评分）
+      const ratingData = [];
+      Object.entries(values).forEach(([targetUserId, score]) => {
+        if (score > 0) { // 允许给自己评分
+          ratingData.push({
+            session: currentVote.id,
+            target: parseInt(targetUserId.replace('score_', '')),
+            score: score
+          });
+        }
+      });
+
+      // 批量提交评分
+      for (let i = 0; i < ratingData.length; i++) {
+        await ratingAPI.createRating(ratingData[i]);
+      }
+
+      message.success('评分提交成功！');
+
+      // 标记用户已参与此活动
+      setUserParticipatedSessions(prev => new Set([...prev, currentVote.id]));
+
       setIsParticipateModalVisible(false);
       participateForm.resetFields();
-      
+      setCurrentTotalScore(0); // 重置总分
+
+      // 刷新评分活动数据
+      await fetchMyRatingSessions();
+
     } catch (error) {
-      console.error('提交投票失败:', error);
+      console.error('提交评分失败:', error);
       if (error.errorFields) {
         message.error('请检查表单填写是否完整');
       } else {
-        message.error('提交投票失败，请重试');
+        message.error(getErrorMessage(error, '提交评分失败，请重试'));
       }
     }
   };
@@ -399,6 +535,7 @@ const Voting = ({ projectId }) => {
     setIsParticipateModalVisible(false);
     participateForm.resetFields();
     setCurrentVote(null);
+    setCurrentTotalScore(0); // 重置总分
   };
 
   // 关闭结果Modal
@@ -438,30 +575,27 @@ const Voting = ({ projectId }) => {
   const handleDeleteVote = async (voteId) => {
     try {
       console.log('准备删除投票:', voteId);
-      
-      // 从本地状态中删除
-      setLocalVotes(prev => prev.filter(vote => vote.id !== voteId));
-      
-      // 这里应该调用API删除投票，目前使用模拟
-      // const result = await deleteVote(voteId);
-      
-      // 模拟删除成功
-      const result = { success: true };
-      
-      if (result.success) {
-        message.success('投票删除成功！');
-        // 刷新投票列表
-        fetchMyVotes();
-      } else {
-        message.error('删除投票失败，请重试');
-        // 如果删除失败，重新加载数据
-        fetchMyVotes();
-      }
+
+      // 调用API删除评分活动
+      const response = await ratingAPI.deleteRatingSession(voteId);
+      console.log('删除成功响应:', response);
+
+      message.success('投票删除成功！');
+      // 刷新评分活动列表
+      await fetchMyRatingSessions();
     } catch (error) {
-      console.error('删除投票失败:', error);
-      message.error('删除投票失败，请重试');
+      console.error('删除投票失败 - 完整错误对象:', error);
+      console.error('错误响应状态:', error.response?.status);
+      console.error('错误响应数据:', error.response?.data);
+      console.error('错误响应头:', error.response?.headers);
+
+      // 显示后端返回的具体错误信息
+      const errorMessage = getErrorMessage(error, '删除投票失败，请重试');
+      console.log('最终错误信息:', errorMessage);
+
+      message.error(errorMessage);
       // 如果删除失败，重新加载数据
-      fetchMyVotes();
+      await fetchMyRatingSessions();
     }
   };
 
@@ -476,38 +610,35 @@ const Voting = ({ projectId }) => {
 
   const otherUsers = Array.isArray(allUsers) ? allUsers.filter(u => u.id !== user?.id) : [];
 
-  // 合并本地投票和store中的投票
-  const allVotes = [...(Array.isArray(myVotes) ? myVotes : []), ...localVotes];
-  
-  // 过滤已发起项目的投票数据 - 显示用户创建的投票
-  const filteredMyVotes = projectId 
-    ? allVotes.filter(vote => 
-        vote.vote_type === 'project' && 
-        vote.target_project === projectId && 
-        vote.created_by === user?.id
+  // 使用 ratingSessions 数据而不是 myVotes
+  const allSessions = Array.isArray(ratingSessions) ? ratingSessions : [];
+
+  // 过滤已发起项目的评分活动数据 - 显示用户创建的评分活动
+  const filteredRatingSessions = projectId
+    ? allSessions.filter(session =>
+        session.project === projectId &&
+        session.created_by === user?.id
       )
-    : allVotes.filter(vote => 
-        vote.vote_type === 'project' && 
-        vote.created_by === user?.id
+    : allSessions.filter(session =>
+        session.created_by === user?.id
       );
 
   // 统计数据
-  const totalVoteCount = filteredMyVotes.length;
+  const totalVoteCount = filteredRatingSessions.length;
   
   // 调试信息
   console.log('调试信息:', {
     projectId,
     userId: user?.id,
     userInfo: user,
-    myVotes: myVotes,
-    localVotes: localVotes,
-    allVotes: allVotes,
-    filteredMyVotes: filteredMyVotes,
+    ratingSessions: ratingSessions,
+    allSessions: allSessions,
+    filteredRatingSessions: filteredRatingSessions,
     totalVoteCount,
-    canDeleteVotes: filteredMyVotes.map(vote => ({
-      id: vote.id,
-      title: vote.title,
-      canDelete: canDeleteVote(vote)
+    canDeleteSessions: filteredRatingSessions.map(session => ({
+      id: session.id,
+      theme: session.theme,
+      canDelete: canDeleteVote(session)
     }))
   });
 
@@ -517,10 +648,10 @@ const Voting = ({ projectId }) => {
       label: '已发起项目的投票',
       children: (
         <div>
-          {filteredMyVotes.length > 0 ? (
+          {filteredRatingSessions.length > 0 ? (
             <Row gutter={[20, 20]}>
-              {filteredMyVotes.map((vote) => (
-                <Col span={24} key={vote.id}>
+              {filteredRatingSessions.map((session) => (
+                <Col span={24} key={session.id}>
                   <Card
                     style={{
                       marginBottom: 0,
@@ -575,7 +706,7 @@ const Voting = ({ projectId }) => {
                               color: '#262626',
                               lineHeight: 1.4
                             }}>
-                              {vote.title || vote.target_name || '项目投票'}
+                              {session.theme || '评分活动'}
                             </h3>
                             <div style={{
                               display: 'flex',
@@ -583,46 +714,67 @@ const Voting = ({ projectId }) => {
                               gap: 8,
                               marginTop: 4
                             }}>
-                              <Tag 
-                                color="blue" 
+                              <Tag
+                                color="blue"
                                 style={{
                                   borderRadius: 6,
                                   fontSize: 12,
                                   fontWeight: 500
                                 }}
                               >
-                                项目投票
+                                评分活动
         </Tag>
+                              {hasUserParticipated(session.id) && (
+                                <Tag
+                                  color="green"
+                                  style={{
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    fontWeight: 500
+                                  }}
+                                >
+                                  ✅ 已参与
+                                </Tag>
+                              )}
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {new Date(vote.created_at).toLocaleDateString()}
+                                {new Date(session.created_at).toLocaleDateString()}
                               </Text>
                             </div>
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* 操作按钮 */}
                       <div style={{ display: 'flex', gap: 8 }}>
             <Button
-                          type="primary" 
+                          type={hasUserParticipated(session.id) ? "default" : "primary"}
               size="small"
-                          onClick={() => handleParticipateVote(vote)}
+                          onClick={() => handleParticipateVote(session)}
+                          disabled={hasUserParticipated(session.id)}
                           style={{
                             borderRadius: 6,
                             height: 32,
                             fontSize: 12,
                             fontWeight: 500,
-                            background: 'linear-gradient(135deg, #1890ff, #40a9ff)',
-                            border: 'none',
-                            boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
+                            background: hasUserParticipated(session.id)
+                              ? '#f5f5f5'
+                              : 'linear-gradient(135deg, #1890ff, #40a9ff)',
+                            border: hasUserParticipated(session.id) ? '1px solid #d9d9d9' : 'none',
+                            color: hasUserParticipated(session.id) ? '#bfbfbf' : 'white',
+                            boxShadow: hasUserParticipated(session.id)
+                              ? 'none'
+                              : '0 2px 4px rgba(24, 144, 255, 0.3)',
+                            cursor: hasUserParticipated(session.id) ? 'not-allowed' : 'pointer'
                           }}
                         >
-                          <span style={{ marginRight: 4 }}>✋</span>
-                          参与投票
+                          <span style={{ marginRight: 4 }}>
+                            {hasUserParticipated(session.id) ? '✅' : '✋'}
+                          </span>
+                          {hasUserParticipated(session.id) ? '已参与' : '参与投票'}
             </Button>
-                        <Button 
+                        <Button
                           size="small"
-                          onClick={() => handleViewVoteResults(vote)}
+                          onClick={() => handleViewVoteResults(session)}
                           style={{
                             borderRadius: 6,
                             height: 32,
@@ -635,11 +787,11 @@ const Voting = ({ projectId }) => {
                           <span style={{ marginRight: 4 }}>📈</span>
                           查看结果
                         </Button>
-                        {canDeleteVote(vote) && (
+                        {canDeleteVote(session) && (
             <Popconfirm
-              title="确定删除这个投票吗？"
+              title="确定删除这个评分活动吗？"
               description="删除后无法恢复"
-                            onConfirm={() => handleDeleteVote(vote.id)}
+                            onConfirm={() => handleDeleteVote(session.id)}
               okText="确定"
               cancelText="取消"
             >
@@ -683,8 +835,8 @@ const Voting = ({ projectId }) => {
                           <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
                             评分标题
         </Text>
-                          <Text style={{ 
-                            fontSize: 14, 
+                          <Text style={{
+                            fontSize: 14,
                             color: '#262626',
                             fontWeight: 500,
                             display: 'block',
@@ -692,7 +844,7 @@ const Voting = ({ projectId }) => {
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap'
                           }}>
-                            {vote.title || vote.target_name || '项目投票'}
+                            {session.theme || '评分活动'}
                           </Text>
                         </div>
                       </div>
@@ -710,15 +862,15 @@ const Voting = ({ projectId }) => {
                           <Text strong style={{ fontSize: 12, color: '#8c8c8c', display: 'block' }}>
                             评分内容
                           </Text>
-                          <Text style={{ 
-                            fontSize: 14, 
+                          <Text style={{
+                            fontSize: 14,
                             color: '#262626',
                             display: 'block',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap'
                           }}>
-                            {vote.description || '暂无描述'}
+                            {session.description || '暂无描述'}
                           </Text>
                         </div>
                       </div>
@@ -740,15 +892,15 @@ const Voting = ({ projectId }) => {
                             alignItems: 'center',
                             gap: 4
                           }}>
-                            <Text style={{ 
-                              fontSize: 18, 
+                            <Text style={{
+                              fontSize: 18,
                               fontWeight: 600,
                               color: '#52c41a'
                             }}>
-                              {vote.participant_count || (vote.evaluators ? vote.evaluators.length : 0)}
+                              {session.selected_members ? session.selected_members.length : 0}
                             </Text>
-                            <Text style={{ 
-                              fontSize: 12, 
+                            <Text style={{
+                              fontSize: 12,
                               color: '#52c41a'
                             }}>
                               人
@@ -757,7 +909,7 @@ const Voting = ({ projectId }) => {
                         </div>
                       </div>
 
-                      {/* 投票时间 */}
+                      {/* 创建时间 */}
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -770,7 +922,7 @@ const Voting = ({ projectId }) => {
                             创建时间
                           </Text>
                           <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                            {new Date(vote.created_at).toLocaleDateString()}
+                            {new Date(session.created_at).toLocaleDateString()}
                           </Text>
                         </div>
                       </div>
@@ -780,7 +932,7 @@ const Voting = ({ projectId }) => {
               ))}
             </Row>
           ) : (
-            <Empty description="暂无已发起的项目投票" />
+            <Empty description="暂无已发起的评分活动" />
           )}
         </div>
       ),
@@ -867,11 +1019,11 @@ const Voting = ({ projectId }) => {
                 />
               </Card>
             </Col>
-        <Col span={12}>
+            <Col span={12}>
               <Card>
                 <Statistic
               title="参与成员总数"
-              value={filteredMyVotes.reduce((sum, vote) => sum + (vote.participant_count || 0), 0)}
+              value={filteredRatingSessions.reduce((sum, session) => sum + (session.selected_members ? session.selected_members.length : 0), 0)}
               suffix="人"
                   prefix={<UserOutlined />}
               valueStyle={{ color: '#52c41a' }}
@@ -1236,7 +1388,7 @@ const Voting = ({ projectId }) => {
               borderRadius: 2 
             }} />
             <span style={{ fontSize: 16, fontWeight: 600 }}>
-              参与投票 - {currentVote?.title || ''}
+              参与投票 - {currentVote?.theme || ''}
             </span>
           </div>
         }
@@ -1301,21 +1453,58 @@ const Voting = ({ projectId }) => {
               </div>
             </div>
 
-            {/* 总分提示 */}
+            {/* 实时总分提示 */}
             <div style={{
-              background: '#f6ffed',
-              border: '1px solid #b7eb8f',
+              background: currentTotalScore > 100 ? '#fff2f0' : '#f0f5ff',
+              border: `1px solid ${currentTotalScore > 100 ? '#ffccc7' : '#adc6ff'}`,
               borderRadius: 8,
               padding: 12,
               marginBottom: 20,
               display: 'flex',
-              alignItems: 'center',
-              gap: 8
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              <span style={{ color: '#52c41a', fontSize: 16 }}>💡</span>
-              <Text style={{ color: '#52c41a', fontWeight: 500 }}>
-                请为所有成员分配分数，总分必须为100分
-              </Text>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <span style={{
+                  fontSize: 16,
+                  color: currentTotalScore > 100 ? '#ff4d4f' : '#1890ff'
+                }}>
+                  {currentTotalScore > 100 ? '⚠️' : '💡'}
+                </span>
+                <Text style={{
+                  color: currentTotalScore > 100 ? '#ff4d4f' : '#1890ff',
+                  fontWeight: 500
+                }}>
+                  {currentTotalScore > 100
+                    ? `总分超出限制，请减少 ${currentTotalScore - 100} 分`
+                    : currentTotalScore === 0
+                    ? '请为成员分配分数，总分不能超过100分'
+                    : '总分正常，可以提交投票'
+                  }
+                </Text>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <Text strong style={{
+                  fontSize: 18,
+                  color: currentTotalScore > 100 ? '#ff4d4f' : '#1890ff'
+                }}>
+                  {currentTotalScore}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: '#8c8c8c'
+                }}>
+                  / 100 分
+                </Text>
+              </div>
             </div>
             
             <Form form={participateForm} layout="vertical">
@@ -1326,9 +1515,14 @@ const Voting = ({ projectId }) => {
                 border: '1px solid #f0f0f0'
               }}>
                     {(() => {
-                  const currentProject = projects.find(p => p.id === currentVote.target_project);
-                  const participants = currentProject?.members_detail || [];
-                  
+                  const currentProject = projects.find(p => p.id === currentVote.project);
+                  const allProjectMembers = currentProject?.members_detail || [];
+
+                  // 过滤出真正的参与者
+                  const participants = allProjectMembers.filter(member =>
+                    currentVote.selected_members && currentVote.selected_members.includes(member.user)
+                  );
+
                   return participants.map((member, index) => (
                     <div key={member.user} style={{
                       background: 'white',
@@ -1396,7 +1590,6 @@ const Voting = ({ projectId }) => {
                           </div>
                         }
             rules={[
-                          { required: true, message: '请输入分数！' },
                           { type: 'number', min: 0, max: 100, message: '分数必须在0-100之间！' }
             ]}
                         style={{ marginBottom: 0 }}
@@ -1405,15 +1598,21 @@ const Voting = ({ projectId }) => {
                           min={0}
                           max={100}
                           step={1}
-                          style={{ 
+                          style={{
                             width: '100%',
                             height: 40,
                             fontSize: 16
                           }}
                           placeholder="请输入分数 (0-100)"
+                          onChange={() => {
+                            // 使用setTimeout确保表单值已更新
+                            setTimeout(() => {
+                              calculateCurrentTotalScore();
+                            }, 0);
+                          }}
                           addonAfter={
-                            <span style={{ 
-                              color: '#1890ff', 
+                            <span style={{
+                              color: '#1890ff',
                               fontWeight: 600,
                               fontSize: 14
                             }}>
@@ -1439,11 +1638,18 @@ const Voting = ({ projectId }) => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  color: '#8c8c8c',
+                  color: currentTotalScore > 100 ? '#ff4d4f' : '#1890ff',
                   fontSize: 12
                 }}>
-                  <span>⚠️</span>
-                  <span>请确保总分等于100分</span>
+                  <span>
+                    {currentTotalScore > 100 ? '⚠️' : '💡'}
+                  </span>
+                  <span>
+                    {currentTotalScore > 100
+                      ? `总分超出 ${currentTotalScore - 100} 分，请调整后提交`
+                      : '总分不能超过100分，可以不满100分'
+                    }
+                  </span>
                 </div>
                 
                 <div style={{ display: 'flex', gap: 12 }}>
@@ -1459,18 +1665,24 @@ const Voting = ({ projectId }) => {
                   >
                     取消
                   </Button>
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     onClick={handleSubmitParticipation}
+                    disabled={currentTotalScore > 100}
                     size="large"
                     style={{
                       height: 40,
                       paddingLeft: 24,
                       paddingRight: 24,
                       borderRadius: 6,
-                      background: 'linear-gradient(135deg, #1890ff, #40a9ff)',
+                      background: currentTotalScore > 100
+                        ? '#f5f5f5'
+                        : 'linear-gradient(135deg, #1890ff, #40a9ff)',
                       border: 'none',
-                      boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
+                      boxShadow: currentTotalScore > 100
+                        ? 'none'
+                        : '0 2px 4px rgba(24, 144, 255, 0.3)',
+                      color: currentTotalScore > 100 ? '#bfbfbf' : 'white'
                     }}
                   >
                     <span style={{ marginRight: 4 }}>✓</span>
@@ -1485,7 +1697,7 @@ const Voting = ({ projectId }) => {
 
       {/* 投票结果Modal */}
       <Modal
-        title={`投票结果 - ${voteResults?.vote?.title || ''}`}
+        title={`投票结果 - ${voteResults?.vote?.theme || ''}`}
         open={isResultModalVisible}
         onCancel={handleCloseResult}
         width={1000}

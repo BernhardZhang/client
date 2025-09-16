@@ -8,7 +8,7 @@ import Points from './components/Points/Points';
 import Finance from './components/Finance/Finance';
 import Merit from './components/Merit/Merit';
 import ProjectHall from './components/Projects/ProjectHall';
-import ProjectTasksPage from './components/Projects/ProjectTasksPage';
+import TasksPage from './components/Tasks/TasksPage';
 import DataAnalysis from './components/Analysis/DataAnalysis';
 import PublicHome from './components/Public/PublicHome';
 import PublicProject from './components/Public/PublicProject';
@@ -54,14 +54,14 @@ function App() {
               
               {/* 数据分析页面使用新的左中右布局 */}
               <Route path="/evaluation" element={<DataAnalysis />} />
-              
+
               {/* 其他页面使用ResponsiveLayout */}
               <Route path="/dashboard" element={<ResponsiveLayout />}>
                 <Route index element={<Dashboard />} />
               </Route>
               
               {/* 项目详情页 */}
-              <Route path="/projects/:projectId" element={<PublicRoute><ProjectTasksPage /></PublicRoute>} />
+              <Route path="/projects/:projectId" element={<PublicRoute><TasksPage /></PublicRoute>} />
               <Route path="/public/projects/:projectId" element={<PublicRoute><PublicProject /></PublicRoute>} />
               
               {/* 兼容旧路由 */}

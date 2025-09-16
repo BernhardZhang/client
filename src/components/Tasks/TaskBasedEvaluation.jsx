@@ -38,9 +38,10 @@ import {
   DeleteOutlined,
   BarChartOutlined,
 } from '@ant-design/icons';
-import useAuthStore from '../../stores/authStore';
-import useTaskStore from '../../stores/taskStore';
-import { tasksAPI } from '../../services/api';
+import useAuthStore from '../../stores/authStore.js';
+import useTaskStore from '../../stores/taskStore.js';
+import useVotingStore from '../../stores/votingStore.js';
+import { tasksAPI } from '../../services/api.js';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -60,14 +61,21 @@ const TaskBasedEvaluation = ({ projectId, project, isProjectOwner }) => {
   const [activeTab, setActiveTab] = useState('list');
 
   const { user } = useAuthStore();
-  const { 
-    evaluationSessions, 
-    fetchEvaluationSessions, 
+  const {
+    evaluationSessions,
+    fetchEvaluationSessions,
     createEvaluationSession,
     submitBatchEvaluation,
     completeEvaluationSession,
-    isLoading 
+    isLoading
   } = useTaskStore();
+  const {
+    myVotes,
+    fetchMyVotes,
+    votingRounds,
+    fetchVotingRounds,
+    activeRound
+  } = useVotingStore();
 
   useEffect(() => {
     if (projectId) {
@@ -75,6 +83,9 @@ const TaskBasedEvaluation = ({ projectId, project, isProjectOwner }) => {
       fetchCompletedTasks();
       fetchAllTasks();
       fetchProjectMembers();
+      // Also load voting data
+      fetchMyVotes();
+      fetchVotingRounds();
     }
   }, [projectId]);
 
@@ -504,6 +515,118 @@ const TaskBasedEvaluation = ({ projectId, project, isProjectOwner }) => {
               </Col>
             </Row>
           </Card>
+        </Tabs.TabPane>
+
+        <Tabs.TabPane tab="投票评分" key="voting">
+          <div>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Card size="small" bodyStyle={{ padding: '8px 12px' }}>
+                  <Statistic
+                    title="我的投票次数"
+                    value={myVotes.length}
+                    prefix={<StarOutlined />}
+                    valueStyle={{ fontSize: '16px', color: '#722ed1' }}
+                    titleStyle={{ fontSize: '12px' }}
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small" bodyStyle={{ padding: '8px 12px' }}>
+                  <Statistic
+                    title="投票轮次"
+                    value={votingRounds.length}
+                    prefix={<CalendarOutlined />}
+                    valueStyle={{ fontSize: '16px', color: '#1890ff' }}
+                    titleStyle={{ fontSize: '12px' }}
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small" bodyStyle={{ padding: '8px 12px' }}>
+                  <Statistic
+                    title="当前轮次"
+                    value={activeRound ? activeRound.name : '无'}
+                    prefix={<TrophyOutlined />}
+                    valueStyle={{ fontSize: '16px', color: '#52c41a' }}
+                    titleStyle={{ fontSize: '12px' }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            <Card title="我的投票记录">
+              {myVotes && myVotes.length > 0 ? (
+                <Table
+                  dataSource={myVotes}
+                  rowKey="id"
+                  size="small"
+                  pagination={{
+                    pageSize: 5,
+                    size: 'small',
+                    showTotal: (total) => `共 ${total} 条投票记录`,
+                  }}
+                  columns={[
+                    {
+                      title: '投票对象',
+                      dataIndex: 'target_name',
+                      key: 'target_name',
+                      render: (text, record) => (
+                        <Space>
+                          <Avatar size="small" icon={<UserOutlined />} />
+                          <Text>{text || record.voted_user_name || '未知'}</Text>
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: '投票分数',
+                      dataIndex: 'score',
+                      key: 'score',
+                      render: (score) => (
+                        <Text strong style={{ color: '#1890ff' }}>
+                          {score || 0} 分
+                        </Text>
+                      ),
+                    },
+                    {
+                      title: '投票轮次',
+                      dataIndex: 'voting_round_name',
+                      key: 'voting_round_name',
+                      render: (text) => (
+                        <Tag color="blue">{text || '未知轮次'}</Tag>
+                      ),
+                    },
+                    {
+                      title: '投票时间',
+                      dataIndex: 'created_at',
+                      key: 'created_at',
+                      render: (date) => (
+                        <Text type="secondary">
+                          {date ? dayjs(date).format('YYYY-MM-DD HH:mm') : '-'}
+                        </Text>
+                      ),
+                    },
+                    {
+                      title: '评论',
+                      dataIndex: 'comment',
+                      key: 'comment',
+                      render: (comment) => (
+                        <Text type="secondary" ellipsis={{ tooltip: comment }}>
+                          {comment || '无评论'}
+                        </Text>
+                      ),
+                    },
+                  ]}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                  <StarOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                  <div>暂无投票记录</div>
+                  <Text type="secondary">当有投票活动时，您的投票记录会在这里显示</Text>
+                </div>
+              )}
+            </Card>
+          </div>
         </Tabs.TabPane>
       </Tabs>
 
