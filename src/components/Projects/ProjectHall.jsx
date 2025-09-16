@@ -24,7 +24,10 @@ import {
   Divider,
   List,
   Timeline,
-  Progress
+  Progress,
+  InputNumber,
+  Slider,
+  Checkbox
 } from 'antd';
 import {
   ShopOutlined,
@@ -82,13 +85,20 @@ const ProjectHall = () => {
   });
   const [viewingProject, setViewingProject] = useState(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [projectDetail, setProjectDetail] = useState(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState('card');
+  const [isInvestModalVisible, setIsInvestModalVisible] = useState(false);
+  const [investProject, setInvestProject] = useState(null);
+  const [investAmount, setInvestAmount] = useState(0);
+  const [agreeRisk, setAgreeRisk] = useState(false);
+  const [investSubmitting, setInvestSubmitting] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, isAuthenticated } = useAuthStore();
+  const { user, logout, isAuthenticated, updateProfile } = useAuthStore();
   const { fetchProjects } = useProjectStore();
 
   // 获取公开项目数据
@@ -205,6 +215,10 @@ const ProjectHall = () => {
   const handleMenuClick = ({ key }) => {
     if (key === 'logout') {
       handleLogout();
+    } else if (key === 'notifications') {
+      navigate('/notifications');
+    } else if (key === 'settings') {
+      navigate('/settings');
     } else if (key.startsWith('/')) {
       navigate(key);
     }
@@ -230,17 +244,67 @@ const ProjectHall = () => {
     .sort((a, b) => (b.members_count || 0) - (a.members_count || 0))
     .slice(0, 5);
 
+  const fetchProjectDetail = async (projectId) => {
+    setDetailLoading(true);
+    try {
+      const res = await api.get(`/projects/${projectId}/`);
+      setProjectDetail(res.data || null);
+    } catch (e) {
+      console.error('获取项目详情失败:', e);
+      setProjectDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleViewProject = (project) => {
     setViewingProject(project);
     setIsDetailModalVisible(true);
+    fetchProjectDetail(project.id);
   };
 
-  const handleJoinProject = (project) => {
+  const handleOpenInvest = async (project) => {
     if (!isAuthenticated()) {
       handleLoginRequired();
       return;
     }
-    message.success(`已申请加入项目：${project.name}`);
+    try {
+      await updateProfile?.();
+    } catch (e) {
+      console.warn('刷新用户资料失败，继续打开投资弹窗');
+    }
+    setInvestProject(project);
+    setInvestAmount(0);
+    setAgreeRisk(false);
+    setIsInvestModalVisible(true);
+  };
+
+  const handleSubmitInvest = async () => {
+    if (!investProject) return;
+    if (investAmount <= 0 || investAmount > 1) {
+      message.warning('请输入0-1元之间的投资金额');
+      return;
+    }
+    if (typeof user?.balance === 'number' && investAmount > user.balance) {
+      message.error('可用额度不足');
+      return;
+    }
+    if (!agreeRisk) {
+      message.warning('请勾选风险提示与协议');
+      return;
+    }
+    try {
+      setInvestSubmitting(true);
+      await api.post(`/projects/${investProject.id}/invest/`, { amount: Number(investAmount.toFixed(2)) });
+      message.success('投资成功');
+      setIsInvestModalVisible(false);
+      setInvestProject(null);
+    } catch (error) {
+      console.error('投资失败:', error);
+      message.error('投资失败，请稍后重试');
+    } finally {
+      setInvestSubmitting(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -308,7 +372,7 @@ const ProjectHall = () => {
             <Text>{record.members_count || 0} 成员</Text>
           </Space>
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            估值: ¥{record.valuation || 0}
+            投资人: {record.investor_count || record.investors_count || 0}
           </Text>
         </Space>
       ),
@@ -344,9 +408,9 @@ const ProjectHall = () => {
           <Button 
             type="primary" 
             size="small"
-            onClick={() => handleJoinProject(record)}
+            onClick={() => handleOpenInvest(record)}
           >
-            加入
+            投资项目
           </Button>
         </Space>
       ),
@@ -357,6 +421,15 @@ const ProjectHall = () => {
     <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
       <Card
         hoverable
+        style={{
+          borderRadius: 12,
+          border: '1px solid #f0f0f0',
+          boxShadow: '0 6px 18px rgba(0,0,0,0.06)',
+          transition: 'all 0.25s ease',
+          overflow: 'hidden',
+          background: 'linear-gradient(180deg, #ffffff 0%, #fafafa 100%)'
+        }}
+        bodyStyle={{ padding: 16, minHeight: 220 }}
         actions={[
           <Button 
             type="link" 
@@ -369,55 +442,90 @@ const ProjectHall = () => {
           <Button 
             type="primary" 
             size="small"
-            onClick={() => handleJoinProject(project)}
+            onClick={() => handleOpenInvest(project)}
           >
-            加入项目
+            投资项目
           </Button>
         ]}
       >
-        <Card.Meta
-          avatar={<Avatar size="large" icon={<ProjectOutlined />} />}
-          title={
-            <Space>
-              <Text strong>{project.name}</Text>
-              <Tag color={getStatusColor(project.status)}>
-                {getStatusText(project.status)}
-              </Tag>
-            </Space>
-          }
-          description={
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {project.description?.substring(0, 80)}...
-              </Text>
-              <Progress 
-                percent={project.progress || 0} 
-                size="small" 
-                status={project.status === 'completed' ? 'success' : 'active'}
-              />
-              <Row gutter={8}>
-                <Col span={8}>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    <TeamOutlined /> {project.members_count || 0} 成员
-                  </Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    <TrophyOutlined /> {project.task_count || 0} 任务
-                  </Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    <FireOutlined /> {project.view_count || Math.floor(Math.random() * 1000) + 100} 热度
-                  </Text>
-                </Col>
-              </Row>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                估值: ¥{project.valuation || 0}
-              </Text>
-            </Space>
-          }
-        />
+        {/* 顶部标头 */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%)',
+            border: '1px solid #e6f4ff',
+            marginRight: 10
+          }}>
+            <ProjectOutlined style={{ color: '#1677ff', fontSize: 20 }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: 600 }} ellipsis>{project.name}</Text>
+              <Tag color={getStatusColor(project.status)}>{getStatusText(project.status)}</Tag>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+              {project.description || '暂无描述'}
+            </Text>
+          </div>
+        </div>
+
+        {/* 进度条 */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 12, color: '#8c8c8c' }}>项目进度</Text>
+            <Text style={{ fontSize: 12, fontWeight: 600, color: '#1677ff' }}>{project.progress || 0}%</Text>
+          </div>
+          <Progress 
+            percent={project.progress || 0} 
+            size="small" 
+            status={project.status === 'completed' ? 'success' : 'active'}
+          />
+        </div>
+
+        {/* 指标区域：2x2 等宽网格对齐 */}
+        <Row gutter={[8, 8]}>
+          <Col span={12}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: '#f6ffed', color: '#389e0d', border: '1px solid #b7eb8f',
+              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
+            }}>
+              <TeamOutlined />{project.members_count || 0} 成员
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: '#fff7e6', color: '#d46b08', border: '1px solid #ffd591',
+              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
+            }}>
+              <TrophyOutlined />{project.task_count || 0} 任务
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: '#f9f0ff', color: '#722ed1', border: '1px solid #d3adf7',
+              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
+            }}>
+              💼 {project.investor_count || project.investors_count || 0} 投资人
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e',
+              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
+            }}>
+              <FireOutlined />{project.view_count || Math.floor(Math.random() * 1000) + 100} 浏览
+            </div>
+          </Col>
+        </Row>
       </Card>
     </Col>
   );
@@ -648,12 +756,13 @@ const ProjectHall = () => {
       <LoginPrompt
         visible={showLoginPrompt}
         onClose={() => setShowLoginPrompt(false)}
-        message="请登录后加入项目"
+        message="请登录后投资项目"
         onLogin={handlePromptLogin}
         onRegister={handlePromptRegister}
       />
 
-      {/* 项目详情模态框 */}
+      {/* 项目详情模态框 */
+      }
       <Modal
         title="项目详情"
         open={isDetailModalVisible}
@@ -663,54 +772,225 @@ const ProjectHall = () => {
             关闭
           </Button>,
           <Button 
-            key="join" 
+            key="invest" 
             type="primary"
             onClick={() => {
-              handleJoinProject(viewingProject);
               setIsDetailModalVisible(false);
+              handleOpenInvest(viewingProject);
             }}
           >
-            加入项目
+            投资项目
           </Button>
         ]}
         width={800}
       >
         {viewingProject && (
-          <Descriptions column={2} bordered>
-            <Descriptions.Item label="项目名称" span={2}>
-              {viewingProject.name}
-            </Descriptions.Item>
-            <Descriptions.Item label="项目状态">
-              <Tag color={getStatusColor(viewingProject.status)}>
-                {getStatusText(viewingProject.status)}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="项目估值">
-              ¥{viewingProject.valuation || 0}
-            </Descriptions.Item>
-            <Descriptions.Item label="项目描述" span={2}>
-              {viewingProject.description}
-            </Descriptions.Item>
-            <Descriptions.Item label="团队成员">
-              {viewingProject.members_count || 0} 人
-            </Descriptions.Item>
-            <Descriptions.Item label="任务数量">
-              {viewingProject.task_count || 0} 个
-            </Descriptions.Item>
-            <Descriptions.Item label="项目进度" span={2}>
-              <Progress 
-                percent={viewingProject.progress || 0} 
-                status={viewingProject.status === 'completed' ? 'success' : 'active'}
-              />
-            </Descriptions.Item>
-            <Descriptions.Item label="创建时间">
-              {dayjs(viewingProject.created_at).format('YYYY-MM-DD HH:mm')}
-            </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
-              {dayjs(viewingProject.updated_at).format('YYYY-MM-DD HH:mm')}
-            </Descriptions.Item>
-          </Descriptions>
+          <>
+            <Descriptions column={2} bordered>
+              <Descriptions.Item label="项目名称" span={2}>
+                {viewingProject.name}
+              </Descriptions.Item>
+              <Descriptions.Item label="项目状态">
+                <Tag color={getStatusColor(viewingProject.status)}>
+                  {getStatusText(viewingProject.status)}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="项目估值">
+                ¥{viewingProject.valuation || 0}
+              </Descriptions.Item>
+              <Descriptions.Item label="项目描述" span={2}>
+                {viewingProject.description}
+              </Descriptions.Item>
+              <Descriptions.Item label="团队成员">
+                {projectDetail?.members_count ?? viewingProject.members_count ?? 0} 人
+              </Descriptions.Item>
+              <Descriptions.Item label="任务数量">
+                {projectDetail?.task_count ?? viewingProject.task_count ?? 0} 个
+              </Descriptions.Item>
+              <Descriptions.Item label="项目进度" span={2}>
+                <Progress 
+                  percent={projectDetail?.progress ?? viewingProject.progress ?? 0} 
+                  status={(projectDetail?.status ?? viewingProject.status) === 'completed' ? 'success' : 'active'}
+                />
+              </Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {dayjs(viewingProject.created_at).format('YYYY-MM-DD HH:mm')}
+              </Descriptions.Item>
+              <Descriptions.Item label="更新时间">
+                {dayjs((projectDetail?.updated_at ?? viewingProject.updated_at)).format('YYYY-MM-DD HH:mm')}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div style={{ marginTop: 16 }}>
+              <Row gutter={16}>
+                {/* 任务概览 */}
+                <Col span={12}>
+                  <Card size="small" title="任务概览" loading={detailLoading}>
+                    {projectDetail?.tasks?.length ? (
+                      <List
+                        size="small"
+                        dataSource={projectDetail.tasks.slice(0, 5)}
+                        renderItem={(t) => (
+                          <List.Item>
+                            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                              <span style={{ maxWidth: 200 }} title={t.title}>{t.title}</span>
+                              <Space>
+                                <Tag color={t.status === 'completed' ? 'green' : 'blue'}>
+                                  {t.status === 'completed' ? '已完成' : '进行中'}
+                                </Tag>
+                                {typeof t.task_percentage === 'number' && (
+                                  <Tag color="geekblue">{t.task_percentage}%</Tag>
+                                )}
+                              </Space>
+                            </Space>
+                          </List.Item>
+                        )}
+                      />
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务数据" />
+                    )}
+                  </Card>
+                </Col>
+
+                {/* 项目分析内容 */}
+                <Col span={12}>
+                  <Card size="small" title="项目分析" loading={detailLoading}>
+                    <Typography.Paragraph style={{ marginBottom: 8 }}>
+                      {projectDetail?.analysis_content || projectDetail?.analysis_summary || '暂无项目分析内容'}
+                    </Typography.Paragraph>
+                    {projectDetail?.analytics?.metrics && (
+                      <Row gutter={8}>
+                        {projectDetail.analytics.metrics.slice(0, 3).map((m) => (
+                          <Col span={8} key={m.name}>
+                            <Statistic title={m.name} value={m.value} />
+                          </Col>
+                        ))}
+                      </Row>
+                    )}
+                  </Card>
+                </Col>
+              </Row>
+
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                {/* 团队合作情况 */}
+                <Col span={12}>
+                  <Card size="small" title="团队合作情况" loading={detailLoading}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Space>
+                        <TeamOutlined />
+                        <Text>成员：{projectDetail?.members_count ?? viewingProject.members_count ?? 0} 人</Text>
+                      </Space>
+                      {projectDetail?.members_detail?.length ? (
+                        <Space wrap>
+                          {projectDetail.members_detail.slice(0, 6).map((m) => (
+                            <Tag key={m.user} color={m.role === 'owner' ? 'blue' : m.role === 'admin' ? 'green' : 'default'}>
+                              {m.user_name || m.username}
+                            </Tag>
+                          ))}
+                          {projectDetail.members_detail.length > 6 && (
+                            <Tag>+{projectDetail.members_detail.length - 6}</Tag>
+                          )}
+                        </Space>
+                      ) : (
+                        <Text type="secondary">暂无详细成员数据</Text>
+                      )}
+                    </Space>
+                  </Card>
+                </Col>
+
+                {/* 核心功能及特点 */}
+                <Col span={12}>
+                  <Card size="small" title="核心功能与特点" loading={detailLoading}>
+                    {Array.isArray(projectDetail?.features) && projectDetail.features.length > 0 ? (
+                      <Space wrap>
+                        {projectDetail.features.map((f, idx) => (
+                          <Tag key={idx} color="processing">{f}</Tag>
+                        ))}
+                      </Space>
+                    ) : Array.isArray(projectDetail?.tags) && projectDetail.tags.length > 0 ? (
+                      <Space wrap>
+                        {projectDetail.tags.slice(0, 8).map((t, idx) => (
+                          <Tag key={idx}>{t}</Tag>
+                        ))}
+                      </Space>
+                    ) : (
+                      <Text type="secondary">暂无功能标签</Text>
+                    )}
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+          </>
         )}
+      </Modal>
+
+      {/* 投资项目弹窗 */}
+      <Modal
+        title="投资项目"
+        open={isInvestModalVisible}
+        onCancel={() => setIsInvestModalVisible(false)}
+        onOk={handleSubmitInvest}
+        confirmLoading={investSubmitting}
+        okText="确认投资"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text strong>项目：</Text>
+          <Text>{investProject?.name}</Text>
+        </div>
+        <div style={{
+          background: '#f6ffed',
+          border: '1px solid #b7eb8f',
+          padding: 12,
+          borderRadius: 6,
+          marginBottom: 12,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Text type="success">账户可用额度</Text>
+          <Space>
+            <Text strong style={{ color: '#52c41a' }}>{typeof user?.balance === 'number' ? user.balance.toFixed(2) : '0.00'}</Text>
+            <Text type="secondary">元</Text>
+          </Space>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>选择投资金额（0-1元）</Text>
+          <Slider
+            min={0}
+            max={1}
+            step={0.01}
+            value={investAmount}
+            onChange={setInvestAmount}
+            marks={{ 0: '0', 1: '1.00' }}
+            tooltip={{ formatter: (v) => `${(v || 0).toFixed(2)} 元` }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <InputNumber
+              min={0}
+              max={1}
+              step={0.01}
+              precision={2}
+              value={investAmount}
+              onChange={(v) => setInvestAmount(Number(v || 0))}
+            />
+            <Text type="secondary">元</Text>
+          </div>
+        </div>
+        <div style={{
+          background: '#fffbe6',
+          border: '1px solid #ffe58f',
+          padding: 12,
+          borderRadius: 6,
+          marginBottom: 12
+        }}>
+          <Text type="secondary">
+            此为体验性投资功能，金额范围为0-1元，请理性参与。投资成功后，您将成为该项目股东，按持有比例享有项目分红权。
+          </Text>
+        </div>
+        <Checkbox checked={agreeRisk} onChange={(e) => setAgreeRisk(e.target.checked)}>
+          我已知晓风险并同意相关协议
+        </Checkbox>
       </Modal>
     </Layout>
   );
