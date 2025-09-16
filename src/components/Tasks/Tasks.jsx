@@ -23,6 +23,7 @@ import {
     Tabs,
     Slider,
     Switch,
+    App,
 } from 'antd';
 import {
     PlusOutlined,
@@ -52,6 +53,7 @@ const { TabPane } = Tabs;
 
 const Tasks = ({ projectId, project, isProjectOwner }) => {
     const [form] = Form.useForm();
+    const { modal } = App.useApp();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
     const [activeTab, setActiveTab] = useState('all');
@@ -865,9 +867,16 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                             handleEditTask(record);
                             break;
                         case 'delete':
-                            if (window.confirm('确定要删除这个任务吗？删除后无法恢复。')) {
-                                handleDeleteTask(record.id);
-                            }
+                            modal.confirm({
+                                title: '确定要删除这个任务吗？',
+                                content: `任务"${record.title}"将被永久删除，此操作不可撤销。`,
+                                okText: '确定删除',
+                                okType: 'danger',
+                                cancelText: '取消',
+                                onOk: async () => {
+                                    await handleDeleteTask(record.id);
+                                },
+                            });
                             break;
                     }
                 };
