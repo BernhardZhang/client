@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Tag, Avatar, Progress, Button, Space, Tooltip, Badge, Typography, Modal, App } from 'antd';
+import useTaskStore from '../../stores/taskStore';
 import {
   TeamOutlined,
   StarFilled,
@@ -39,6 +40,51 @@ const ProjectCard = ({
   onManageVoting,
 }) => {
   const { modal } = App.useApp();
+  const { tasks, fetchTasks } = useTaskStore();
+
+  // 在组件加载时获取所有任务数据
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  // 计算项目的任务总占比 - 从 taskStore 中获取任务数据
+  const calculateTasksProgress = (projectId) => {
+    console.log('ProjectCard 计算项目任务进度 - 项目ID:', projectId);
+    console.log('ProjectCard 全部任务数据:', tasks);
+
+    // 过滤出属于当前项目的任务
+    const projectTasks = tasks.filter(task => task.project === projectId);
+    console.log('ProjectCard 当前项目的任务:', projectTasks);
+
+    const totalProgress = projectTasks.reduce((total, task) => {
+      console.log('ProjectCard 任务:', task.title, '占比:', task.progress);
+      return total + (task.progress || 0);
+    }, 0);
+
+    // 确保总进度不超过100%
+    const clampedProgress = Math.min(totalProgress, 100);
+    console.log('ProjectCard 计算出的总进度:', totalProgress, '限制后的进度:', clampedProgress);
+    return clampedProgress;
+  };
+
+  // 获取进度条颜色配置
+  const getProgressStrokeColor = (tasksProgress) => {
+    if (tasksProgress === 100) {
+      return '#1890ff'; // 蓝色：项目完成
+    }
+
+    // 如果任务总和小于100%，显示分段颜色
+    if (tasksProgress < 100) {
+      return {
+        '0%': '#52c41a',  // 绿色：任务完成部分
+        [`${tasksProgress}%`]: '#52c41a',
+        [`${tasksProgress + 0.1}%`]: '#faad14', // 黄色：未分配部分
+        '100%': '#faad14'
+      };
+    }
+
+    return '#52c41a'; // 绿色：任务完成部分
+  };
 
   // 调试信息
   console.log('ProjectCard received project:', project);
@@ -352,21 +398,37 @@ const ProjectCard = ({
 
       {/* 项目进度 */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <Text style={{ fontSize: 12, color: '#595959', fontWeight: 500 }}>项目进度</Text>
-          <Text style={{ fontSize: 12, fontWeight: 600, color: getStatusColor(project.status) }}>{project.progress || 0}%</Text>
-        </div>
-        <Progress 
-          percent={project.progress || 0} 
-          size="small" 
-          status={project.progress === 100 ? 'success' : 'active'}
-          strokeColor={getStatusColor(project.status)}
-          style={{
-            '& .ant-progress-bg': {
-              borderRadius: '4px !important',
-            }
-          }}
-        />
+        {(() => {
+          const tasksProgress = calculateTasksProgress(project.id);
+          const strokeColor = getProgressStrokeColor(tasksProgress);
+          const unallocatedProgress = Math.max(0, 100 - tasksProgress);
+
+          return (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 12, color: '#595959', fontWeight: 500 }}>项目进度</Text>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: getStatusColor(project.status) }}>{tasksProgress}%</Text>
+              </div>
+              <Progress
+                percent={100}
+                size="small"
+                status={tasksProgress === 100 ? 'success' : 'active'}
+                strokeColor={strokeColor}
+                style={{
+                  '& .ant-progress-bg': {
+                    borderRadius: '4px !important',
+                  }
+                }}
+              />
+              <div style={{ fontSize: '10px', color: '#8c8c8c', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <span>任务: {tasksProgress}%</span>
+                {unallocatedProgress > 0 && (
+                  <span>未分配: {unallocatedProgress}%</span>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* 项目信息 */}
