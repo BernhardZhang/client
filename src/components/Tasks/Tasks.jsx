@@ -51,7 +51,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 const { TabPane } = Tabs;
 
-const Tasks = ({ projectId, project, isProjectOwner }) => {
+const Tasks = ({ projectId, project, isProjectOwner, onProjectRefresh }) => {
     const [form] = Form.useForm();
     const { modal } = App.useApp();
     const [isModalVisible, setIsModalVisible] = useState(false);
@@ -181,6 +181,22 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         }
     };
 
+    // 刷新所有任务相关数据
+    const refreshAllTaskData = async () => {
+        try {
+            // 始终刷新项目任务数据
+            await fetchProjectTasks();
+
+            // 如果当前在"我的任务"标签页或者需要更新我的任务数据，也刷新我的任务
+            if (mainActiveTab === 'my_tasks' || user) {
+                await fetchMyTasks();
+            }
+        } catch (error) {
+            console.error('刷新数据失败:', error);
+            message.error('刷新数据失败，请手动刷新页面');
+        }
+    };
+
     // 领取任务
     const handleClaimTask = async (taskId) => {
         if (!user) {
@@ -208,8 +224,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
             }
 
             // 刷新任务列表
-            fetchMyTasks();
-            fetchProjectTasks();
+            await refreshAllTaskData();
+            // 通知父组件刷新项目数据
+            if (onProjectRefresh) {
+                await onProjectRefresh();
+            }
         } catch (error) {
             console.error('领取任务失败:', error);
             const errorMessage = error.response?.data?.error || '领取任务失败';
@@ -407,6 +426,12 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                         }
                     }
                     message.success('任务更新成功！');
+                    // 刷新项目数据
+                    await fetchProjectTasks();
+                    // 通知父组件刷新项目数据
+                    if (onProjectRefresh) {
+                        await onProjectRefresh();
+                    }
                 } else {
                     // 创建任务
                     if (hasFiles) {
@@ -505,7 +530,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                 }
                 setIsModalVisible(false);
                 form.resetFields();
-                fetchProjectTasks();
+                await refreshAllTaskData();
+                // 通知父组件刷新项目数据
+                if (onProjectRefresh) {
+                    await onProjectRefresh();
+                }
             } catch (error) {
                 console.error('任务操作失败:', error);
                 message.error(error.response?.data?.message || error.message || '操作失败');
@@ -533,7 +562,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
             setLoading(true);
             await tasksAPI.deleteTask(taskId);
             message.success('任务删除成功！');
-            fetchProjectTasks();
+            await refreshAllTaskData();
+            // 通知父组件刷新项目数据
+            if (onProjectRefresh) {
+                await onProjectRefresh();
+            }
         } catch (error) {
             console.error('删除任务失败:', error);
             message.error(error.response?.data?.message || '删除失败');

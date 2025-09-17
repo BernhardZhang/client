@@ -2111,10 +2111,11 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
             </Tabs.TabPane>
             
             <Tabs.TabPane tab="任务管理" key="tasks">
-              <Tasks 
-                projectId={viewingProject.id} 
-                project={viewingProject} 
+              <Tasks
+                projectId={viewingProject.id}
+                project={viewingProject}
                 isProjectOwner={hasAdminPermission(viewingProject)}
+                onProjectRefresh={() => fetchProject(viewingProject.id)}
               />
             </Tabs.TabPane>
             
