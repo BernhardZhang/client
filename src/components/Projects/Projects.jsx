@@ -128,15 +128,17 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     }
   };
   
-  const { 
-    projects: storeProjects, 
-    fetchProjects, 
-    createProject, 
+  const {
+    projects: storeProjects,
+    currentProject,
+    fetchProjects,
+    fetchProject,
+    createProject,
     updateProject,
     deleteProject,
-    joinProject, 
-    leaveProject, 
-    isLoading 
+    joinProject,
+    leaveProject,
+    isLoading
   } = useProjectStore();
   
   // 使用传入的项目数据，如果没有传入则使用store中的数据
@@ -164,6 +166,13 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
       fetchProjects();
     }, 200);
   }, [fetchProjects]);
+
+  // 监听 currentProject 变化，同步更新 viewingProject
+  useEffect(() => {
+    if (currentProject && viewingProject && currentProject.id === viewingProject.id) {
+      setViewingProject(currentProject);
+    }
+  }, [currentProject, viewingProject]);
 
   useEffect(() => {
     // 组件加载时获取项目数据，避免无限循环
@@ -361,16 +370,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
           const response = await api.post(`/projects/${viewingProject.id}/members/${member.user}/set-admin/`);
 
           if (response.status === 200) {
-            // 更新本地状态，将成员角色设置为admin
-            if (viewingProject && viewingProject.members_detail) {
-              const updatedMembers = viewingProject.members_detail.map(m =>
-                m.user === member.user ? { ...m, role: 'admin' } : m
-              );
-              setViewingProject({
-                ...viewingProject,
-                members_detail: updatedMembers
-              });
-            }
+            // 重新获取项目详情以确保数据同步
+            await fetchProject(viewingProject.id);
             message.success(`已将 ${member.user_name} 设置为管理员`);
           }
         } catch (error) {
@@ -395,16 +396,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
           const response = await api.post(`/projects/${viewingProject.id}/members/${member.user}/remove-admin/`);
 
           if (response.status === 200) {
-            // 更新本地状态，将成员角色设置为member
-            if (viewingProject && viewingProject.members_detail) {
-              const updatedMembers = viewingProject.members_detail.map(m =>
-                m.user === member.user ? { ...m, role: 'member' } : m
-              );
-              setViewingProject({
-                ...viewingProject,
-                members_detail: updatedMembers
-              });
-            }
+            // 重新获取项目详情以确保数据同步
+            await fetchProject(viewingProject.id);
             message.success(`已解除 ${member.user_name} 的管理员权限`);
           }
         } catch (error) {
@@ -429,15 +422,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
           const response = await api.delete(`/projects/${viewingProject.id}/members/${member.user}/remove/`);
 
           if (response.status === 200) {
-            // 更新本地状态，移除该成员
-            if (viewingProject && viewingProject.members_detail) {
-              const updatedMembers = viewingProject.members_detail.filter(m => m.user !== member.user);
-              setViewingProject({
-                ...viewingProject,
-                members_detail: updatedMembers,
-                members_count: viewingProject.members_count - 1
-              });
-            }
+            // 重新获取项目详情以确保数据同步
+            await fetchProject(viewingProject.id);
             message.success(`已删除成员 ${member.user_name}`);
             setIsMemberSettingsModalVisible(false);
           }
