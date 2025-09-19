@@ -51,7 +51,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 const { TabPane } = Tabs;
 
-const Tasks = ({ projectId, project, isProjectOwner }) => {
+const Tasks = ({ projectId, project, isProjectOwner, onProjectRefresh }) => {
     const [form] = Form.useForm();
     const { modal } = App.useApp();
     const [isModalVisible, setIsModalVisible] = useState(false);
@@ -82,13 +82,18 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
     const { user } = useAuthStore();
 
     // 计算可用的任务占比
-    const calculateAvailablePercentage = () => {
+    const calculateAvailablePercentage = (excludeTaskId = null) => {
         const usedPercentage = tasks.reduce((total, task) => {
-            return total + (task.task_percentage || 0);
+            // 如果正在编辑任务，排除当前任务的占比
+            if (excludeTaskId && task.id === excludeTaskId) {
+                return total;
+            }
+            return total + (task.progress || 0);
         }, 0);
         const available = 100 - usedPercentage;
-        setAvailablePercentage(Math.max(0, available));
-        return available;
+        const availablePercent = Math.max(0, available);
+        setAvailablePercentage(availablePercent);
+        return availablePercent;
     };
 
     // 更新可用占比
@@ -176,6 +181,22 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         }
     };
 
+    // 刷新所有任务相关数据
+    const refreshAllTaskData = async () => {
+        try {
+            // 始终刷新项目任务数据
+            await fetchProjectTasks();
+
+            // 如果当前在"我的任务"标签页或者需要更新我的任务数据，也刷新我的任务
+            if (mainActiveTab === 'my_tasks' || user) {
+                await fetchMyTasks();
+            }
+        } catch (error) {
+            console.error('刷新数据失败:', error);
+            message.error('刷新数据失败，请手动刷新页面');
+        }
+    };
+
     // 领取任务
     const handleClaimTask = async (taskId) => {
         if (!user) {
@@ -203,8 +224,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
             }
 
             // 刷新任务列表
-            fetchMyTasks();
-            fetchProjectTasks();
+            await refreshAllTaskData();
+            // 通知父组件刷新项目数据
+            if (onProjectRefresh) {
+                await onProjectRefresh();
+            }
         } catch (error) {
             console.error('领取任务失败:', error);
             const errorMessage = error.response?.data?.error || '领取任务失败';
@@ -246,6 +270,9 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         setSelectedAssignee(task.assignee);
         setWeightCoefficient(task.weight_coefficient || 1.0);
 
+        // 重新计算可用占比，排除当前任务
+        calculateAvailablePercentage(task.id);
+
         // 处理参与成员数据
         if (task.participating_members && Array.isArray(task.participating_members)) {
             setParticipatingMembers(task.participating_members);
@@ -267,11 +294,14 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         form.setFieldsValue({
             ...task,
             participating_members: task.participating_members ? task.participating_members.map(p => p.user) : (task.assignee ? [task.assignee] : []),
-            task_percentage: task.task_percentage || task.progress || 0, // 兼容旧数据
+            task_percentage: task.progress || 0, // 后端使用progress字段
             weight_coefficient: task.weight_coefficient || 1.0,
             start_date: task.start_date ? dayjs(task.start_date) : null,
             due_date: task.due_date ? dayjs(task.due_date) : null,
         });
+        console.log('编辑任务 - 原始任务数据:', task);
+        console.log('编辑任务 - 设置到表单的task_percentage值:', task.progress || 0);
+        console.log('编辑任务 - 表单设置后的所有值:', form.getFieldsValue());
     };
 
     const handleViewTask = async (task) => {
@@ -297,6 +327,8 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
+            console.log('表单验证后获取的所有values:', values);
+            console.log('其中task_percentage的值:', values.task_percentage);
 
             // 提取文件列表
             const files = values.files || [];
@@ -315,7 +347,7 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                         formData.append('description', values.description || '');
                         formData.append('priority', values.priority || 'medium');
                         formData.append('status', values.status || 'pending');
-                        formData.append('task_percentage', values.task_percentage || 0);
+                        formData.append('progress', values.task_percentage || 0);
                         formData.append('category', values.category || '');
                         formData.append('tags', values.tags || '');
                         formData.append('estimated_hours', values.estimated_hours || '');
@@ -367,14 +399,19 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                             participating_members_input: participatingMembers,
                             priority: values.priority,
                             status: values.status,
-                            task_percentage: values.task_percentage,
+                            progress: values.task_percentage, // 后端使用progress字段
                             category: values.category,
                             tags: values.tags,
                             estimated_hours: values.estimated_hours,
                             start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : null,
                             due_date: values.due_date ? values.due_date.format('YYYY-MM-DD') : null,
                         };
-                        await tasksAPI.updateTask(editingTask.id, taskData);
+                        console.log('发送给后端的任务数据:', taskData);
+                        console.log('表单中的task_percentage值:', values.task_percentage);
+                        console.log('发送的progress值:', taskData.progress);
+                        const response = await tasksAPI.updateTask(editingTask.id, taskData);
+                        console.log('后端返回的完整响应:', response.data);
+                        console.log('后端返回的progress值:', response.data.progress);
 
                         // 记录任务更新日志
                         try {
@@ -389,6 +426,12 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                         }
                     }
                     message.success('任务更新成功！');
+                    // 刷新项目数据
+                    await fetchProjectTasks();
+                    // 通知父组件刷新项目数据
+                    if (onProjectRefresh) {
+                        await onProjectRefresh();
+                    }
                 } else {
                     // 创建任务
                     if (hasFiles) {
@@ -401,7 +444,7 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                         formData.append('project', projectId);
                         formData.append('priority', values.priority || 'medium');
                         formData.append('status', values.status || 'pending');
-                        formData.append('task_percentage', values.task_percentage || 0);
+                        formData.append('progress', values.task_percentage || 0);
                         formData.append('category', values.category || '');
                         formData.append('tags', values.tags || '');
                         formData.append('estimated_hours', values.estimated_hours || '');
@@ -458,7 +501,7 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                             project: projectId,
                             priority: values.priority || 'medium',
                             status: values.status || 'pending',
-                            task_percentage: values.task_percentage || 0,
+                            progress: values.task_percentage || 0, // 后端使用progress字段
                             category: values.category,
                             tags: values.tags,
                             estimated_hours: values.estimated_hours,
@@ -487,7 +530,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                 }
                 setIsModalVisible(false);
                 form.resetFields();
-                fetchProjectTasks();
+                await refreshAllTaskData();
+                // 通知父组件刷新项目数据
+                if (onProjectRefresh) {
+                    await onProjectRefresh();
+                }
             } catch (error) {
                 console.error('任务操作失败:', error);
                 message.error(error.response?.data?.message || error.message || '操作失败');
@@ -506,6 +553,8 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         setWeightCoefficient(1.0);
         setParticipatingMembers([]); // 重置参与成员列表
         form.resetFields();
+        // 重置可用占比计算
+        calculateAvailablePercentage();
     };
 
     const handleDeleteTask = async (taskId) => {
@@ -513,7 +562,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
             setLoading(true);
             await tasksAPI.deleteTask(taskId);
             message.success('任务删除成功！');
-            fetchProjectTasks();
+            await refreshAllTaskData();
+            // 通知父组件刷新项目数据
+            if (onProjectRefresh) {
+                await onProjectRefresh();
+            }
         } catch (error) {
             console.error('删除任务失败:', error);
             message.error(error.response?.data?.message || '删除失败');
@@ -579,23 +632,23 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
     const getProgressConfig = (status, progress) => {
         const configs = {
             pending: {
-                percent: 0,                    // 待接任务显示0%
-                strokeColor: '#faad14',        // 黄色
+                percent: progress || 0,            // 待接任务显示实际占比
+                strokeColor: '#faad14',            // 黄色
                 status: 'normal'
             },
             in_progress: {
                 percent: Math.max(progress || 1, 1), // 已接任务显示实际进度，最少1%
-                strokeColor: '#52c41a',        // 绿色
+                strokeColor: '#52c41a',            // 绿色
                 status: 'active'
             },
             completed: {
-                percent: 100,                  // 完成任务显示100%
-                strokeColor: '#1890ff',        // 蓝色
+                percent: progress || 100,          // 完成任务显示实际占比或100%
+                strokeColor: '#1890ff',            // 蓝色
                 status: 'success'
             },
             cancelled: {
                 percent: progress || 0,
-                strokeColor: '#ff4d4f',        // 红色
+                strokeColor: '#ff4d4f',            // 红色
                 status: 'exception'
             }
         };
@@ -779,11 +832,11 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
         },
         {
             title: '任务占比',
-            dataIndex: 'task_percentage',
-            key: 'task_percentage',
+            dataIndex: 'progress',
+            key: 'progress',
             width: 120,
-            render: (task_percentage = 0, record) => {
-                const progressConfig = getProgressConfig(record.status, task_percentage || record.progress || 0);
+            render: (progress, record) => {
+                const progressConfig = getProgressConfig(record.status, progress || 0);
 
                 return (
                     <div>
@@ -1394,51 +1447,102 @@ const Tasks = ({ projectId, project, isProjectOwner }) => {
                         label={
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span>任务占比</span>
-                                <Tag color={availablePercentage > 0 ? 'green' : 'red'}>
-                                    剩余可分配: {availablePercentage}%
-                                </Tag>
+                                {(() => {
+                                    const otherTasksProgress = tasks.reduce((total, task) => {
+                                        if (editingTask && task.id === editingTask.id) {
+                                            return total;
+                                        }
+                                        return total + (task.progress || 0);
+                                    }, 0);
+                                    const maxAvailable = Math.max(0, 100 - otherTasksProgress);
+                                    return (
+                                        <Tag color={maxAvailable > 0 ? 'green' : 'red'}>
+                                            可设置: {maxAvailable}%
+                                        </Tag>
+                                    );
+                                })()}
                             </div>
                         }
                         rules={[
                             { required: true, message: '请设置任务占比！' },
                             {
                                 validator: (_, value) => {
-                                    if (value > availablePercentage) {
-                                        return Promise.reject(new Error(`任务占比不能超过剩余可分配比例 ${availablePercentage}%`));
+                                    // 计算当前所有任务的总占比（排除正在编辑的任务）
+                                    const otherTasksProgress = tasks.reduce((total, task) => {
+                                        if (editingTask && task.id === editingTask.id) {
+                                            return total; // 排除当前编辑的任务
+                                        }
+                                        return total + (task.progress || 0);
+                                    }, 0);
+
+                                    const newTotal = otherTasksProgress + value;
+
+                                    if (newTotal > 100) {
+                                        return Promise.reject(new Error(`任务占比总和不能超过100%，当前其他任务总占比为${otherTasksProgress}%，您最多只能设置${100 - otherTasksProgress}%`));
                                     }
                                     return Promise.resolve();
                                 }
                             }
                         ]}
                         initialValue={0}
-                    >
-                        <div>
+                        extra={
                             <div style={{
-                                marginBottom: 8,
+                                marginTop: 8,
                                 padding: 8,
                                 background: '#f6ffed',
                                 borderRadius: 6,
                                 border: '1px solid #b7eb8f'
                             }}>
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                    此任务占项目总工作量的比例。当前项目剩余可分配比例: {availablePercentage}%
+                                    {(() => {
+                                        const otherTasksProgress = tasks.reduce((total, task) => {
+                                            if (editingTask && task.id === editingTask.id) {
+                                                return total;
+                                            }
+                                            return total + (task.progress || 0);
+                                        }, 0);
+                                        const maxAvailable = Math.max(0, 100 - otherTasksProgress);
+                                        return `此任务占项目总工作量的比例。当前其他任务总占比: ${otherTasksProgress}%，最多可设置: ${maxAvailable}%`;
+                                    })()}
                                 </Text>
                             </div>
-                            <Slider
-                                min={0}
-                                max={availablePercentage}
-                                marks={{
+                        }
+                    >
+                        <Slider
+                            min={0}
+                            max={(() => {
+                                // 计算当前所有任务的总占比（排除正在编辑的任务）
+                                const otherTasksProgress = tasks.reduce((total, task) => {
+                                    if (editingTask && task.id === editingTask.id) {
+                                        return total; // 排除当前编辑的任务
+                                    }
+                                    return total + (task.progress || 0);
+                                }, 0);
+                                return Math.max(0, 100 - otherTasksProgress);
+                            })()}
+                            marks={(() => {
+                                const maxValue = (() => {
+                                    const otherTasksProgress = tasks.reduce((total, task) => {
+                                        if (editingTask && task.id === editingTask.id) {
+                                            return total;
+                                        }
+                                        return total + (task.progress || 0);
+                                    }, 0);
+                                    return Math.max(0, 100 - otherTasksProgress);
+                                })();
+
+                                return {
                                     0: '0%',
-                                    ...(availablePercentage >= 25 && { 25: '25%' }),
-                                    ...(availablePercentage >= 50 && { 50: '50%' }),
-                                    ...(availablePercentage >= 75 && { 75: '75%' }),
-                                    [availablePercentage]: `${availablePercentage}%`
-                                }}
-                                tooltip={{
-                                    formatter: (value) => `${value}%`
-                                }}
-                            />
-                        </div>
+                                    ...(maxValue >= 25 && { 25: '25%' }),
+                                    ...(maxValue >= 50 && { 50: '50%' }),
+                                    ...(maxValue >= 75 && { 75: '75%' }),
+                                    [maxValue]: `${maxValue}%`
+                                };
+                            })()}
+                            tooltip={{
+                                formatter: (value) => `${value}%`
+                            }}
+                        />
                     </Form.Item>
 
                     <Form.Item
