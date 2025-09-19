@@ -58,7 +58,8 @@ import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
 import useTaskStore from '../../stores/taskStore';
 import ProjectLogs from './ProjectLogs';
-import ProjectRevenue from './ProjectRevenue';
+// 替换收益管理为AI分析
+import ProjectAIAnalysis from './ProjectAIAnalysis';
 import ProjectAnalytics from './ProjectAnalytics';
 import Tasks from '../Tasks/Tasks';
 import ProjectCardGrid from './ProjectCardGrid';
@@ -1322,28 +1323,6 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <Form.Item
-                name="progress"
-                label="项目进度"
-                initialValue={0}
-              >
-                <Slider
-                  min={0}
-                  max={100}
-                  marks={{
-                    0: '0%',
-                    25: '25%',
-                    50: '50%',
-                    75: '75%',
-                    100: '100%'
-                  }}
-                  tooltip={{
-                    formatter: (value) => `${value}%`
-                  }}
-                />
-              </Form.Item>
-            </Col>
           </Row>
           <Row gutter={16}>
             <Col span={12}>
@@ -1577,7 +1556,7 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                       </Row>
 
                       {/* 项目进度 */}
-                      <div style={{
+                      <div style={{ 
                         background: '#f8f9fa',
                         borderRadius: '8px',
                         padding: '12px',
@@ -2111,9 +2090,9 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
             </Tabs.TabPane>
             
             <Tabs.TabPane tab="任务管理" key="tasks">
-              <Tasks
-                projectId={viewingProject.id}
-                project={viewingProject}
+              <Tasks 
+                projectId={viewingProject.id} 
+                project={viewingProject} 
                 isProjectOwner={hasAdminPermission(viewingProject)}
                 onProjectRefresh={() => fetchProject(viewingProject.id)}
               />
@@ -2129,8 +2108,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
                     isProjectOwner={hasAdminPermission(viewingProject)} 
                   />
                 </Tabs.TabPane>
-                <Tabs.TabPane tab="收益管理" key="revenue">
-                  <ProjectRevenue projectId={viewingProject.id} isProjectOwner={hasAdminPermission(viewingProject)} />
+                <Tabs.TabPane tab="AI分析" key="ai">
+                  <ProjectAIAnalysis projectId={viewingProject.id} isProjectOwner={hasAdminPermission(viewingProject)} />
                 </Tabs.TabPane>
               </Tabs>
             </Tabs.TabPane>
