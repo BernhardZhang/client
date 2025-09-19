@@ -215,10 +215,6 @@ const ProjectHall = () => {
   const handleMenuClick = ({ key }) => {
     if (key === 'logout') {
       handleLogout();
-    } else if (key === 'notifications') {
-      navigate('/notifications');
-    } else if (key === 'settings') {
-      navigate('/settings');
     } else if (key.startsWith('/')) {
       navigate(key);
     }
@@ -421,15 +417,6 @@ const ProjectHall = () => {
     <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
       <Card
         hoverable
-        style={{
-          borderRadius: 12,
-          border: '1px solid #f0f0f0',
-          boxShadow: '0 6px 18px rgba(0,0,0,0.06)',
-          transition: 'all 0.25s ease',
-          overflow: 'hidden',
-          background: 'linear-gradient(180deg, #ffffff 0%, #fafafa 100%)'
-        }}
-        bodyStyle={{ padding: 16, minHeight: 220 }}
         actions={[
           <Button 
             type="link" 
@@ -448,84 +435,51 @@ const ProjectHall = () => {
           </Button>
         ]}
       >
-        {/* 顶部标头 */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%)',
-            border: '1px solid #e6f4ff',
-            marginRight: 10
-          }}>
-            <ProjectOutlined style={{ color: '#1677ff', fontSize: 20 }} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: 600 }} ellipsis>{project.name}</Text>
-              <Tag color={getStatusColor(project.status)}>{getStatusText(project.status)}</Tag>
-            </div>
-            <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
-              {project.description || '暂无描述'}
-            </Text>
-          </div>
-        </div>
-
-        {/* 进度条 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <Text style={{ fontSize: 12, color: '#8c8c8c' }}>项目进度</Text>
-            <Text style={{ fontSize: 12, fontWeight: 600, color: '#1677ff' }}>{project.progress || 0}%</Text>
-          </div>
-          <Progress 
-            percent={project.progress || 0} 
-            size="small" 
-            status={project.status === 'completed' ? 'success' : 'active'}
-          />
-        </div>
-
-        {/* 指标区域：2x2 等宽网格对齐 */}
-        <Row gutter={[8, 8]}>
-          <Col span={12}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: '#f6ffed', color: '#389e0d', border: '1px solid #b7eb8f',
-              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
-            }}>
-              <TeamOutlined />{project.members_count || 0} 成员
-            </div>
-          </Col>
-          <Col span={12}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: '#fff7e6', color: '#d46b08', border: '1px solid #ffd591',
-              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
-            }}>
-              <TrophyOutlined />{project.task_count || 0} 任务
-            </div>
-          </Col>
-          <Col span={12}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: '#f9f0ff', color: '#722ed1', border: '1px solid #d3adf7',
-              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
-            }}>
-              💼 {project.investor_count || project.investors_count || 0} 投资人
-            </div>
-          </Col>
-          <Col span={12}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e',
-              padding: '8px 10px', borderRadius: 10, fontSize: 12, width: '100%'
-            }}>
-              <FireOutlined />{project.view_count || Math.floor(Math.random() * 1000) + 100} 浏览
-            </div>
-          </Col>
-        </Row>
+        <Card.Meta
+          avatar={<Avatar size="large" icon={<ProjectOutlined />} />}
+          title={
+            <Space>
+              <Text strong>{project.name}</Text>
+              <Tag color={getStatusColor(project.status)}>
+                {getStatusText(project.status)}
+              </Tag>
+            </Space>
+          }
+          description={
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                {project.description?.substring(0, 80)}...
+              </Text>
+              <Progress 
+                percent={project.progress || 0} 
+                size="small" 
+                status={project.status === 'completed' ? 'success' : 'active'}
+              />
+              <Row gutter={8}>
+                <Col span={6}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <TeamOutlined /> {project.members_count || 0} 成员
+                  </Text>
+                </Col>
+                <Col span={6}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <TrophyOutlined /> {project.task_count || 0} 任务
+                  </Text>
+                </Col>
+                <Col span={6}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    💼 {project.investor_count || project.investors_count || 0} 投资人
+                  </Text>
+                </Col>
+                <Col span={6}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <FireOutlined /> {project.view_count || Math.floor(Math.random() * 1000) + 100} 浏览
+                  </Text>
+                </Col>
+              </Row>
+            </Space>
+          }
+        />
       </Card>
     </Col>
   );

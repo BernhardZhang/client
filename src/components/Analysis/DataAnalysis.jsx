@@ -239,10 +239,6 @@ const DataAnalysis = () => {
     const handleMenuClick = ({ key }) => {
         if (key === 'logout') {
             handleLogout();
-        } else if (key === 'notifications') {
-            navigate('/notifications');
-        } else if (key === 'settings') {
-            navigate('/settings');
         } else if (key.startsWith('/')) {
             navigate(key);
         }

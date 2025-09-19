@@ -12,8 +12,6 @@ import TasksPage from './components/Tasks/TasksPage';
 import DataAnalysis from './components/Analysis/DataAnalysis';
 import PublicHome from './components/Public/PublicHome';
 import PublicProject from './components/Public/PublicProject';
-import Notifications from './components/Notifications/Notifications';
-import Settings from './components/Settings/Settings';
 import useAuthStore from './stores/authStore';
 import 'antd/dist/reset.css';
 import './App.css';
@@ -57,12 +55,6 @@ function App() {
               {/* 数据分析页面使用新的左中右布局 */}
               <Route path="/evaluation" element={<DataAnalysis />} />
               
-              {/* 消息通知页面使用新的左中右布局 */}
-              <Route path="/notifications" element={<Notifications />} />
-              
-              {/* 系统设置页面使用新的左中右布局 */}
-              <Route path="/settings" element={<Settings />} />
-
               {/* 其他页面使用ResponsiveLayout */}
               <Route path="/dashboard" element={<ResponsiveLayout />}>
                 <Route index element={<Dashboard />} />

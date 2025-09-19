@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -13,7 +13,6 @@ import {
   DatePicker,
   Button,
   Avatar,
-  List,
   Empty,
   Tooltip,
   Divider,
@@ -35,6 +34,7 @@ import {
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
 import useTaskStore from '../../stores/taskStore';
+import usePointsStore from '../../stores/pointsStore';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -43,14 +43,29 @@ const { Option } = Select;
 const ProjectAnalytics = ({ projectId, project, isProjectOwner }) => {
   const [timeRange, setTimeRange] = useState('month');
   const [analyticsData, setAnalyticsData] = useState({});
+  const [projectPoints, setProjectPoints] = useState(null);
   
   const { user } = useAuthStore();
   const { projects } = useProjectStore();
   const { tasks } = useTaskStore();
+  const { fetchProjectPoints } = usePointsStore();
 
   useEffect(() => {
     generateAnalyticsData();
   }, [projectId, timeRange, project, tasks]);
+
+  useEffect(() => {
+    const loadProjectPoints = async () => {
+      if (!projectId) return;
+      try {
+        const data = await fetchProjectPoints(projectId);
+        setProjectPoints(data || null);
+      } catch (e) {
+        setProjectPoints(null);
+      }
+    };
+    loadProjectPoints();
+  }, [projectId, fetchProjectPoints]);
 
   // 生成项目分析数据
   const generateAnalyticsData = () => {
@@ -106,15 +121,18 @@ const ProjectAnalytics = ({ projectId, project, isProjectOwner }) => {
       progressTrendData,
       taskDistributionData,
       memberTaskData,
+      projectTasks,
+      projectMembers,
     });
   };
 
   const {
     taskStats = {},
-    memberContributions = [],
     progressTrendData = [],
     taskDistributionData = [],
     memberTaskData = [],
+    projectTasks = [],
+    projectMembers = [],
   } = analyticsData;
 
     // 进度趋势图配置 - 移除，改用简化展示
@@ -291,107 +309,284 @@ const ProjectAnalytics = ({ projectId, project, isProjectOwner }) => {
         </Col>
       </Row>
 
-      {/* 成员贡献分析 */}
-      <Row gutter={16}>
-        <Col span={12}>
-          <Card title="成员贡献分析">
-            <List
-              dataSource={memberContributions}
-              renderItem={(member) => (
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={<Avatar icon={<UserOutlined />} />}
-                    title={member.name}
-                    description={
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Text>任务完成:</Text>
-                          <Text strong>{member.completedTasks}/{member.tasks}</Text>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Text>贡献比例:</Text>
-                          <Progress
-                            percent={member.contribution}
-                            size="small"
-                            style={{ width: 100 }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Text>股份占比:</Text>
-                          <Text strong style={{ color: '#52c41a' }}>
-                            {member.equity.toFixed(2)}%
-                          </Text>
-                        </div>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
+      {/* 任务拆分与权重分配分析 */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={24}>
+          <Card title="任务拆分与权重分配分析" extra={<Text type="secondary">总价值100分制</Text>}>
+            <div style={{ marginBottom: 16 }}>
+              <Text>每个项目总价值为100分，根据任务占比分配；角色权重用于体现成员在任务中的重要性。</Text>
+            </div>
+            <Table
+              dataSource={(projectTasks || []).map((t, idx) => {
+                // 任务占比：优先使用预估工时占比，否则均分
+                const validHours = (projectTasks || []).map(x => Number(x.estimated_hours || 0)).reduce((a,b)=>a+b,0);
+                const taskShare = validHours > 0 ? Number(t.estimated_hours || 0) / validHours : (projectTasks.length > 0 ? 1 / projectTasks.length : 0);
+                const roleWeight = Number(t.weight_coefficient || 1.0);
+                return {
+                  key: t.id || idx,
+                  title: t.title,
+                  share: (taskShare * 100).toFixed(2) + '%',
+                  roleWeight: roleWeight.toFixed(2),
+                };
+              })}
+              pagination={false}
+              columns={[
+                { title: '任务', dataIndex: 'title', key: 'title' },
+                { title: '任务占比', dataIndex: 'share', key: 'share' },
+                { title: '角色权重', dataIndex: 'roleWeight', key: 'roleWeight' },
+              ]}
             />
           </Card>
         </Col>
-        <Col span={12}>
-          <Card title="项目关键指标">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              <div>
-                <Text strong>项目估值:</Text>
-                <br />
-                <Text style={{ fontSize: 24, color: '#722ed1' }}>
-                  ¥{Number(project.valuation || 0).toFixed(2)}
-                </Text>
-              </div>
-              
-              <div>
-                <Text strong>完成率:</Text>
-                <br />
-                <Progress 
-                  percent={taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0}
-                  status="active"
-                  strokeColor={{
-                    from: '#108ee9',
-                    to: '#87d068',
-                  }}
-                />
-              </div>
-
-              <div>
-                <Text strong>项目状态:</Text>
-                <br />
-                <Tag 
-                  color={
-                    project.status === 'active' ? 'success' : 
-                    project.status === 'completed' ? 'default' : 'warning'
-                  }
-                  style={{ fontSize: 14, padding: '4px 12px' }}
-                >
-                  {project.status === 'active' ? '进行中' : 
-                   project.status === 'completed' ? '已完成' : '待审核'}
-                </Tag>
-              </div>
-
-              <div>
-                <Text strong>创建时间:</Text>
-                <br />
-                <Text type="secondary">
-                  {new Date(project.created_at).toLocaleDateString()}
-                </Text>
-              </div>
-
-              {project.funding_rounds && (
-                <div>
-                  <Text strong>融资轮次:</Text>
-                  <br />
-                  <Tag color="purple" style={{ fontSize: 14, padding: '4px 12px' }}>
-                    第{project.funding_rounds}轮
-                  </Tag>
-                </div>
-              )}
-            </Space>
-          </Card>
-        </Col>
       </Row>
+
+      {/* 时效奖惩机制分析 */}
+      <TimelinessPanel tasks={projectTasks} />
+
+      {/* 系统分计算 */}
+      <SystemScorePanel tasks={projectTasks} members={projectMembers} />
+
+      {/* 功分评分 */}
+      <MeritScorePanel projectPoints={projectPoints} members={projectMembers} />
+
+      {/* 综合评分 */}
+      <CombinedScorePanel tasks={projectTasks} members={projectMembers} projectPoints={projectPoints} />
     </div>
   );
 };
 
 export default ProjectAnalytics;
+
+// ========== 子组件与工具函数 ==========
+
+const computePlannedDays = (task) => {
+  const start = task.start_date ? new Date(task.start_date) : null;
+  const due = task.due_date ? new Date(task.due_date) : null;
+  if (!due || !start) return null;
+  const ms = due.getTime() - start.getTime();
+  return ms > 0 ? Math.ceil(ms / (24 * 3600 * 1000)) : null;
+};
+
+const computeTimeCoefficientClient = (task) => {
+  const due = task.due_date ? new Date(task.due_date) : null;
+  const completed = task.completed_at ? new Date(task.completed_at) : (task.completion_date ? new Date(task.completion_date) : null);
+  if (!due || !completed) return 1.0;
+
+  const daysDiff = Math.floor((completed.getTime() - due.getTime()) / (24 * 3600 * 1000));
+  // 提前完成：负数
+  if (daysDiff < 0) {
+    const earlyDays = Math.abs(daysDiff);
+    if (earlyDays >= 4 && earlyDays <= 7) return 1.3;
+    if (earlyDays >= 1 && earlyDays <= 3) return 1.2;
+    if (earlyDays > 7) return 1.3; // 上限按1.3
+    return 1.0;
+  }
+
+  if (daysDiff === 0) return 1.0; // 按时
+
+  // 超时：按比例
+  const plannedDays = computePlannedDays(task);
+  if (plannedDays && plannedDays > 0) {
+    const overRate = daysDiff / plannedDays; // 超时百分比
+    if (overRate <= 0.1) return 0.9;
+    if (overRate <= 0.3) return 0.7;
+    return 0.5;
+  }
+
+  // 无计划时长，退化到天数分档
+  if (daysDiff <= 1) return 0.9;
+  if (daysDiff <= 3) return 0.7;
+  return 0.5;
+};
+
+const computeTaskShare = (task, allTasks) => {
+  const hours = allTasks.map(t => Number(t.estimated_hours || 0));
+  const sum = hours.reduce((a,b)=>a+b,0);
+  if (sum > 0) return Number(task.estimated_hours || 0) / sum;
+  return allTasks.length > 0 ? 1 / allTasks.length : 0;
+};
+
+const computeSystemScore = (task, allTasks) => {
+  const taskShare = computeTaskShare(task, allTasks); // 0-1
+  const roleWeight = Number(task.weight_coefficient || 1.0); // 0.1-1.0
+  const timeCoef = computeTimeCoefficientClient(task); // 0.5-1.3
+  // 系统分=任务占比×角色权重×时效系数×100
+  return taskShare * roleWeight * timeCoef * 100;
+};
+
+const TimelinessPanel = ({ tasks }) => {
+  const stats = useMemo(() => {
+    const res = { early13: 0, early12: 0, ontime: 0, over10: 0, over30: 0, overGt30: 0 };
+    (tasks || []).forEach(t => {
+      if (!t.due_date || !(t.completed_at || t.completion_date)) return;
+      const due = new Date(t.due_date);
+      const completed = new Date(t.completed_at || t.completion_date);
+      const days = Math.floor((completed.getTime() - due.getTime()) / (24*3600*1000));
+      if (days < 0) {
+        const early = Math.abs(days);
+        if (early >= 4) res.early13 += 1; else if (early >= 1) res.early12 += 1;
+      } else if (days === 0) {
+        res.ontime += 1;
+      } else {
+        const planned = computePlannedDays(t);
+        if (planned && planned > 0) {
+          const rate = days / planned;
+          if (rate <= 0.1) res.over10 += 1; else if (rate <= 0.3) res.over30 += 1; else res.overGt30 += 1;
+        } else {
+          if (days <= 1) res.over10 += 1; else if (days <= 3) res.over30 += 1; else res.overGt30 += 1;
+        }
+      }
+    });
+    return res;
+  }, [tasks]);
+
+  return (
+    <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Col span={24}>
+        <Card title="时效奖惩机制" extra={<Text type="secondary">基于任务完成时间的奖惩系数</Text>}>
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Card>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div><Text strong>提前完成奖励</Text> <Text type="secondary">提前1-3天: 系数1.2｜提前4-7天: 系数1.3</Text></div>
+                <div style={{ display:'flex', gap:16 }}>
+                  <Tag color="success">提前1-3天: {stats.early12}</Tag>
+                  <Tag color="processing">提前4-7天: {stats.early13}</Tag>
+                </div>
+              </Space>
+            </Card>
+            <Card>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div><Text strong>按时完成</Text> <Text type="secondary">系数 1.0</Text></div>
+                <Tag color="blue">按时完成 {stats.ontime}</Tag>
+              </Space>
+            </Card>
+            <Card>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div><Text strong>超时惩罚</Text> <Text type="secondary">≤10%:0.9｜10-30%:0.7｜>30%:0.5</Text></div>
+                <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                  <Tag color="orange">超时≤10%: {stats.over10}</Tag>
+                  <Tag color="warning">10-30%: {stats.over30}</Tag>
+                  <Tag color="red">>30%: {stats.overGt30}</Tag>
+                </div>
+              </Space>
+            </Card>
+          </Space>
+        </Card>
+      </Col>
+    </Row>
+  );
+};
+
+const SystemScorePanel = ({ tasks, members }) => {
+  const data = useMemo(() => {
+    const rows = (members || []).map(m => ({ key: m.user, name: m.user_name, system: 0 }));
+    const byId = new Map(rows.map(r => [r.key, r]));
+    (tasks || []).forEach(t => {
+      if (!t.assignee) return;
+      const score = computeSystemScore(t, tasks || []);
+      const row = byId.get(t.assignee);
+      if (row) row.system += score;
+    });
+    rows.forEach(r => { r.system = Number(r.system || 0); });
+    return rows;
+  }, [tasks, members]);
+
+  return (
+    <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Col span={24}>
+        <Card title="系统分计算" extra={<Text type="secondary">系统分 = 任务占比 × 角色权重 × 时效系数</Text>}>
+          <Table
+            dataSource={data}
+            pagination={false}
+            columns={[
+              { title: '成员', dataIndex: 'name', key: 'name' },
+              { title: '系统分', dataIndex: 'system', key: 'system', render: v => <Text strong>{v.toFixed(2)}</Text> },
+            ]}
+          />
+        </Card>
+      </Col>
+    </Row>
+  );
+};
+
+const MeritScorePanel = ({ projectPoints, members }) => {
+  const rows = useMemo(() => {
+    const pointsMap = new Map();
+    if (projectPoints && Array.isArray(projectPoints.distribution)) {
+      projectPoints.distribution.forEach(item => {
+        pointsMap.set(item.user, Number(item.points || 0));
+      });
+    }
+    const total = Array.from(pointsMap.values()).reduce((a,b)=>a+b,0);
+    return (members || []).map(m => {
+      const p = pointsMap.get(m.user) || 0;
+      const merit = total > 0 ? (p / total) * 30 : 0; // 30分制
+      return { key: m.user, name: m.user_name, points: p, merit: merit };
+    });
+  }, [projectPoints, members]);
+
+  return (
+    <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Col span={24}>
+        <Card title="功分评分" extra={<Text type="secondary">功分 = 个人积分 ÷ 全队总积分 × 30分</Text>}>
+          <Table
+            dataSource={rows}
+            pagination={false}
+            columns={[
+              { title: '成员', dataIndex: 'name', key: 'name' },
+              { title: '个人积分', dataIndex: 'points', key: 'points' },
+              { title: '功分得分', dataIndex: 'merit', key: 'merit', render: v => <Tag color="purple">{Number(v).toFixed(2)}</Tag> },
+            ]}
+          />
+        </Card>
+      </Col>
+    </Row>
+  );
+};
+
+const CombinedScorePanel = ({ tasks, members, projectPoints }) => {
+  const combined = useMemo(() => {
+    // 系统分
+    const sysMap = new Map();
+    (tasks || []).forEach(t => {
+      if (!t.assignee) return;
+      const s = computeSystemScore(t, tasks || []);
+      sysMap.set(t.assignee, Number(sysMap.get(t.assignee) || 0) + s);
+    });
+    // 功分
+    const pointsMap = new Map();
+    if (projectPoints && Array.isArray(projectPoints.distribution)) {
+      projectPoints.distribution.forEach(item => {
+        pointsMap.set(item.user, Number(item.points || 0));
+      });
+    }
+    const totalPoints = Array.from(pointsMap.values()).reduce((a,b)=>a+b,0);
+
+    return (members || []).map(m => {
+      const sys = Number(sysMap.get(m.user) || 0);
+      const p = Number(pointsMap.get(m.user) || 0);
+      const merit = totalPoints > 0 ? (p / totalPoints) * 30 : 0;
+      const total = sys + merit;
+      return { key: m.user, name: m.user_name, system: sys, merit, total };
+    }).sort((a,b)=> b.total - a.total);
+  }, [tasks, members, projectPoints]);
+
+  return (
+    <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Col span={24}>
+        <Card title="综合评分" extra={<Text type="secondary">系统分 + 功分 = 总分</Text>}>
+          <Table
+            dataSource={combined}
+            pagination={false}
+            columns={[
+              { title: '成员', dataIndex: 'name', key: 'name' },
+              { title: '系统分', dataIndex: 'system', key: 'system', render: v => v.toFixed(2) },
+              { title: '功分', dataIndex: 'merit', key: 'merit', render: v => v.toFixed(2) },
+              { title: '总分', dataIndex: 'total', key: 'total', render: v => <Text strong>{v.toFixed(2)}</Text> },
+            ]}
+          />
+        </Card>
+      </Col>
+    </Row>
+  );
+};
