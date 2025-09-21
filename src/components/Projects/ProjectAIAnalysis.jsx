@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Row, Col, Input, Button, Upload, List, Avatar, Space, Typography, message, Tag, Popconfirm, Tooltip, Modal } from 'antd';
-import { UploadOutlined, SendOutlined, RobotOutlined, UserOutlined, PaperClipOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Input, Button, Upload, List, Avatar, Space, Typography, message, Tag, Popconfirm, Tooltip, Modal, Image } from 'antd';
+import { UploadOutlined, SendOutlined, RobotOutlined, UserOutlined, PaperClipOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, ReloadOutlined, FileImageOutlined, FileOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import cozeService from '../../services/cozeService';
 import useAuthStore from '../../stores/authStore';
@@ -102,9 +102,78 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
     setHistoryModalVisible(true);
   };
 
+  // 创建图片缩略图的函数
+  const createImageThumbnail = (file) => {
+    return new Promise((resolve) => {
+      if (!isImageFile(file.name)) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.createElement('img');
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+
+              // 设置缩略图尺寸
+              const maxSize = 100;
+              let { width, height } = img;
+
+              if (width > height) {
+                if (width > maxSize) {
+                  height = (height * maxSize) / width;
+                  width = maxSize;
+                }
+              } else {
+                if (height > maxSize) {
+                  width = (width * maxSize) / height;
+                  height = maxSize;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+
+              ctx.drawImage(img, 0, 0, width, height);
+              const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+              resolve(thumbnailDataUrl);
+            } catch (e) {
+              console.warn('Failed to create thumbnail:', e);
+              resolve(null);
+            }
+          };
+
+          img.onerror = () => {
+            console.warn('Failed to load image for thumbnail');
+            resolve(null);
+          };
+
+          img.src = e.target.result;
+        };
+
+        reader.onerror = () => {
+          console.warn('Failed to read file');
+          resolve(null);
+        };
+
+        reader.readAsDataURL(file);
+      } catch (e) {
+        console.warn('Failed to create image thumbnail:', e);
+        resolve(null);
+      }
+    });
+  };
+
   const handleUpload = async ({ file, onSuccess, onError }) => {
     try {
       setUploading(true);
+
+      // 为图片文件创建缩略图
+      const thumbnail = await createImageThumbnail(file);
 
       // 首先尝试使用Coze文件上传
       try {
@@ -118,7 +187,8 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           uploadedAt: new Date(uploadResult.createdAt * 1000),
           fileName: uploadResult.fileName,
           fileUrl: uploadResult.fileUrl,
-          suffixType: uploadResult.suffixType
+          suffixType: uploadResult.suffixType,
+          thumbnail: thumbnail // 保存缩略图数据
         };
 
         setUploadedFiles(prev => {
@@ -149,7 +219,8 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           name: file.name,
           size: file.size,
           type: file.type,
-          uploadedAt: new Date()
+          uploadedAt: new Date(),
+          thumbnail: thumbnail // 保存缩略图数据
         };
 
         setUploadedFiles(prev => {
@@ -167,7 +238,8 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           name: file.name,
           size: file.size,
           type: file.type,
-          uploadedAt: new Date()
+          uploadedAt: new Date(),
+          thumbnail: thumbnail // 保存缩略图数据
         };
 
         setUploadedFiles(prev => {
@@ -205,6 +277,47 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const isImageFile = (fileName) => {
+    if (!fileName) return false;
+    const extension = fileName.toLowerCase().split('.').pop();
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+    return imageExtensions.includes(extension);
+  };
+
+  const getFilePreview = (file) => {
+    if (isImageFile(file.name)) {
+      let imageSrc = null;
+
+      // 优先使用保存的缩略图
+      if (file.thumbnail) {
+        imageSrc = file.thumbnail;
+      }
+      // 然后尝试使用 Coze 文件 URL
+      else if (file.fileUrl && !file.fileUrl.includes('data:image')) {
+        imageSrc = file.fileUrl;
+      }
+
+      if (imageSrc) {
+        return (
+          <Image
+            width={50}
+            height={50}
+            src={imageSrc}
+            style={{ objectFit: 'cover', borderRadius: 4 }}
+            preview={{
+              src: file.fileUrl || imageSrc,
+            }}
+            fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3Ik1RnG4W+FmuVYlRSpUsRSCtny..."
+            onError={(e) => {
+              console.warn('Image preview failed to load:', file.name);
+            }}
+          />
+        );
+      }
+    }
+    return null;
+  };
+
   const sendMessage = async () => {
     const content = input.trim();
     if (!content) return;
@@ -213,55 +326,109 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
     setMessages(newMessages);
     setInput('');
 
+    // 添加一个空的助手消息，用于流式更新
+    const assistantMessageIndex = newMessages.length;
+    const messagesWithAssistant = [...newMessages, { role: 'assistant', content: '' }];
+    setMessages(messagesWithAssistant);
+
     try {
       const userId = user?.id?.toString() || user?.username || `user_${Date.now()}`;
 
       // 获取所有Coze上传的文件信息对象
       const cozeFiles = uploadedFiles.filter(file => file.id);
 
-      console.log('开始调用Coze API，用户ID:', userId, '文件数量:', cozeFiles.length);
+      console.log('开始调用Coze流式API，用户ID:', userId, '文件数量:', cozeFiles.length);
 
-      const result = await cozeService.chatStream(content, messages, userId, cozeFiles, conversationId);
+      // 流式回调函数
+      const onMessageCallback = (deltaContent, isCompleted) => {
+        if (isCompleted) {
+          console.log('流式响应完成');
+          return;
+        }
+
+        // 实时更新助手消息内容
+        setMessages(prevMessages => {
+          const updated = [...prevMessages];
+          if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
+            updated[assistantMessageIndex] = {
+              ...updated[assistantMessageIndex],
+              content: updated[assistantMessageIndex].content + deltaContent
+            };
+          }
+          return updated;
+        });
+      };
+
+      const result = await cozeService.chatStream(content, messages, userId, cozeFiles, conversationId, onMessageCallback);
 
       if (result && result.content) {
         // 更新状态
         setConversationId(result.conversationId);
         setLastChatId(result.chatId);
 
-        // 构建完整的对话历史
-        const finalMessages = [...newMessages, { role: 'assistant', content: result.content }];
-        setMessages(finalMessages);
+        // 确保最终消息内容正确
+        setMessages(prevMessages => {
+          const updated = [...prevMessages];
+          if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
+            updated[assistantMessageIndex] = {
+              ...updated[assistantMessageIndex],
+              content: result.content
+            };
+          }
+          return updated;
+        });
 
         // 保存对话历史
+        const finalMessages = [...newMessages, { role: 'assistant', content: result.content }];
         saveConversationHistory(finalMessages, result.conversationId);
 
-        console.log('Coze API调用成功，对话ID:', result.conversationId);
+        console.log('Coze流式API调用成功，对话ID:', result.conversationId);
       } else {
         throw new Error('AI返回了空回复');
       }
     } catch (error) {
-      console.error('Coze API调用失败:', error);
+      console.error('Coze流式API调用失败:', error);
 
       // 显示具体的错误信息给用户
       let errorMessage = 'AI服务调用失败';
-      if (error.message.includes('401')) {
-        errorMessage = 'API认证失败，请检查Token是否有效';
-      } else if (error.message.includes('403')) {
-        errorMessage = 'API权限不足，请检查Bot权限配置';
-      } else if (error.message.includes('429')) {
-        errorMessage = 'API调用频率超限，请稍后再试';
-      } else if (error.message.includes('400')) {
-        errorMessage = 'API请求格式错误，请检查文件格式是否支持';
-      } else {
-        errorMessage = `API调用失败: ${error.message}`;
+      if (error.message) {
+        if (error.message.includes('401') || error.message.includes('unauthorized')) {
+          errorMessage = 'API认证失败，请检查Token是否有效';
+        } else if (error.message.includes('403') || error.message.includes('forbidden')) {
+          errorMessage = 'API权限不足，请检查Bot权限配置';
+        } else if (error.message.includes('429') || error.message.includes('rate limit')) {
+          errorMessage = 'API调用频率超限，请稍后再试';
+        } else if (error.message.includes('400') || error.message.includes('bad request')) {
+          errorMessage = 'API请求格式错误，请检查文件格式是否支持';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = '网络连接错误，请检查网络连接';
+        } else {
+          errorMessage = `API调用失败: ${error.message}`;
+        }
       }
 
       message.error(errorMessage);
 
-      // 添加错误信息到对话中
-      const errorReply = `抱歉，${errorMessage}。\n\n请检查：\n1. 网络连接是否正常\n2. Coze API配置是否正确\n3. 上传的文件格式是否受支持\n\n详细错误信息请查看浏览器控制台。`;
-      const finalMessages = [...newMessages, { role: 'assistant', content: errorReply }];
-      setMessages(finalMessages);
+      // 更新助手消息为错误信息
+      const errorReply = `抱歉，${errorMessage}。
+
+请检查：
+1. 网络连接是否正常
+2. Coze API配置是否正确
+3. 上传的文件格式是否受支持
+
+详细错误信息请查看浏览器控制台。`;
+
+      setMessages(prevMessages => {
+        const updated = [...prevMessages];
+        if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
+          updated[assistantMessageIndex] = {
+            ...updated[assistantMessageIndex],
+            content: errorReply
+          };
+        }
+        return updated;
+      });
     } finally {
       setSending(false);
     }
@@ -305,8 +472,22 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
                   <List.Item key={idx} style={{ border: 'none', padding: '8px 0' }}>
                     <List.Item.Meta
                       avatar={<Avatar icon={m.role === 'assistant' ? <RobotOutlined /> : <UserOutlined />} />}
-                      title={<Text type="secondary">{m.role === 'assistant' ? 'AI助手' : '我'}</Text>}
-                      description={<div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>}
+                      title={
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Text type="secondary">{m.role === 'assistant' ? 'AI助手' : '我'}</Text>
+                          {m.role === 'assistant' && m.content === '' && sending && (
+                            <Text type="secondary" style={{ fontSize: '12px' }}>正在输入...</Text>
+                          )}
+                        </div>
+                      }
+                      description={
+                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                          {m.content}
+                          {m.role === 'assistant' && m.content !== '' && sending && idx === messages.length - 1 && (
+                            <span style={{ color: '#1890ff' }}>▍</span>
+                          )}
+                        </div>
+                      }
                     />
                   </List.Item>
                 )}
@@ -332,11 +513,12 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           <Card title="文件管理" extra={<Text type="secondary">已上传 {uploadedFiles.length} 个文件</Text>}>
             <Upload
               multiple
+              accept="*/*"
               customRequest={handleUpload}
               showUploadList={false}
             >
               <Button icon={<UploadOutlined />} loading={uploading} style={{ width: '100%', marginBottom: 12 }}>
-                上传文件到AI助手
+                上传文件/图片到AI助手
               </Button>
             </Upload>
 
@@ -362,12 +544,19 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
                       ]}
                     >
                       <List.Item.Meta
+                        avatar={getFilePreview(file) || (
+                          <Avatar
+                            icon={isImageFile(file.name) ? <FileImageOutlined /> : <FileOutlined />}
+                            style={{ backgroundColor: isImageFile(file.name) ? '#52c41a' : '#1890ff' }}
+                          />
+                        )}
                         title={
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <Text ellipsis style={{ fontSize: '12px', maxWidth: 120 }}>
                               {file.name}
                             </Text>
                             {file.id && <Tag color="green" size="small">AI可用</Tag>}
+                            {isImageFile(file.name) && <Tag color="orange" size="small">图片</Tag>}
                           </div>
                         }
                         description={
@@ -383,7 +572,7 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
             )}
 
             <div style={{ color: '#8c8c8c', fontSize: '12px' }}>
-              <PaperClipOutlined /> 支持文档、图片等格式。上传到AI助手的文件可用于智能分析。
+              <PaperClipOutlined /> 支持文档、图片等格式。上传的文件和图片可用于AI智能分析。
             </div>
           </Card>
 

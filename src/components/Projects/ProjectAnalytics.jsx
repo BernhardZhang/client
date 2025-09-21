@@ -462,11 +462,11 @@ const TimelinessPanel = ({ tasks }) => {
             </Card>
             <Card>
               <Space direction="vertical" style={{ width: '100%' }}>
-                <div><Text strong>超时惩罚</Text> <Text type="secondary">≤10%:0.9｜10-30%:0.7｜>30%:0.5</Text></div>
+                <div><Text strong>超时惩罚</Text> <Text type="secondary">≤10%:0.9｜10-30%:0.7｜&gt;30%:0.5</Text></div>
                 <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                   <Tag color="orange">超时≤10%: {stats.over10}</Tag>
                   <Tag color="warning">10-30%: {stats.over30}</Tag>
-                  <Tag color="red">>30%: {stats.overGt30}</Tag>
+                  <Tag color="red">&gt;30%: {stats.overGt30}</Tag>
                 </div>
               </Space>
             </Card>
