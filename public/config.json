@@ -2,5 +2,10 @@
 {
   "API_BASE_URL": "http://127.0.0.1:8000/api",
   "SERVER_HOST": "127.0.0.1",
-  "SERVER_PORT": "8000"
+  "SERVER_PORT": "8000",
+  "COZE": {
+    "baseURL": "https://api.coze.cn",
+    "token": "pat_bu1k6k2YFMk6gzGEwiQxiXdAMOIcazWXV7ovwleZO55safzafY8CUw6PHAlwaP4L",
+    "bot_id": "7551401315012886580"
+  }
 }
