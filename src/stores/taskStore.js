@@ -12,13 +12,17 @@ const useTaskStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await tasksAPI.getTasks(params);
-      set({ tasks: response.data.results || response.data, isLoading: false });
+      // 确保tasks总是数组
+      const tasksData = response.data.results || response.data;
+      const tasks = Array.isArray(tasksData) ? tasksData : [];
+      set({ tasks, isLoading: false });
       return response.data;
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      set({ 
+      set({
         error: error.response?.data?.message || error.message || '获取任务列表失败',
-        isLoading: false 
+        isLoading: false,
+        tasks: [] // 确保在错误情况下tasks也是数组
       });
       return { success: false, error: error.response?.data?.message || error.message };
     }
@@ -49,7 +53,7 @@ const useTaskStore = create((set, get) => ({
       const newTask = response.data;
       
       set(state => ({
-        tasks: [newTask, ...state.tasks],
+        tasks: [newTask, ...(Array.isArray(state.tasks) ? state.tasks : [])],
         isLoading: false
       }));
       
@@ -74,25 +78,25 @@ const useTaskStore = create((set, get) => ({
     try {
       const response = await tasksAPI.updateTask(taskId, taskData);
       const updatedTask = response.data;
-      
+
       set(state => ({
-        tasks: state.tasks.map(task => 
+        tasks: Array.isArray(state.tasks) ? state.tasks.map(task =>
           task.id === taskId ? updatedTask : task
-        ),
+        ) : [],
         currentTask: state.currentTask?.id === taskId ? updatedTask : state.currentTask,
         isLoading: false
       }));
-      
+
       return { success: true, data: updatedTask };
     } catch (error) {
       console.error('Error updating task:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.detail || 
-                          error.message || 
+      const errorMessage = error.response?.data?.message ||
+                          error.response?.data?.detail ||
+                          error.message ||
                           '更新任务失败';
-      set({ 
+      set({
         error: errorMessage,
-        isLoading: false 
+        isLoading: false
       });
       return { success: false, error: errorMessage };
     }
@@ -107,7 +111,7 @@ const useTaskStore = create((set, get) => ({
       
       // 任务删除成功，从列表中移除
       set(state => ({
-        tasks: state.tasks.filter(task => task.id !== taskId),
+        tasks: Array.isArray(state.tasks) ? state.tasks.filter(task => task.id !== taskId) : [],
         currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
         isLoading: false
       }));
@@ -120,7 +124,7 @@ const useTaskStore = create((set, get) => ({
       if (error.response?.status === 204) {
         console.log('Task deleted successfully (204 No Content)');
         set(state => ({
-          tasks: state.tasks.filter(task => task.id !== taskId),
+          tasks: Array.isArray(state.tasks) ? state.tasks.filter(task => task.id !== taskId) : [],
           currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
           isLoading: false
         }));
@@ -131,7 +135,7 @@ const useTaskStore = create((set, get) => ({
       if (error.response?.status >= 200 && error.response?.status < 300) {
         console.log('Task deleted successfully (HTTP success status)');
         set(state => ({
-          tasks: state.tasks.filter(task => task.id !== taskId),
+          tasks: Array.isArray(state.tasks) ? state.tasks.filter(task => task.id !== taskId) : [],
           currentTask: state.currentTask?.id === taskId ? null : state.currentTask,
           isLoading: false
         }));
@@ -163,9 +167,9 @@ const useTaskStore = create((set, get) => ({
       const updatedTask = taskResponse.data;
       
       set(state => ({
-        tasks: state.tasks.map(task => 
+        tasks: Array.isArray(state.tasks) ? state.tasks.map(task =>
           task.id === taskId ? updatedTask : task
-        ),
+        ) : [],
         currentTask: state.currentTask?.id === taskId ? updatedTask : state.currentTask,
         isLoading: false
       }));
@@ -200,9 +204,9 @@ const useTaskStore = create((set, get) => ({
       const updatedTask = taskResponse.data;
       
       set(state => ({
-        tasks: state.tasks.map(task => 
+        tasks: Array.isArray(state.tasks) ? state.tasks.map(task =>
           task.id === taskId ? updatedTask : task
-        ),
+        ) : [],
         currentTask: state.currentTask?.id === taskId ? updatedTask : state.currentTask,
         isLoading: false
       }));
@@ -308,9 +312,9 @@ const useTaskStore = create((set, get) => ({
       const updatedTask = taskResponse.data;
       
       set(state => ({
-        tasks: state.tasks.map(task => 
+        tasks: Array.isArray(state.tasks) ? state.tasks.map(task =>
           task.id === taskId ? updatedTask : task
-        ),
+        ) : [],
         currentTask: state.currentTask?.id === taskId ? updatedTask : state.currentTask,
         isLoading: false
       }));

@@ -111,6 +111,12 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     console.log('计算项目任务进度 - 项目ID:', projectId);
     console.log('全部任务数据:', tasks);
 
+    // 确保tasks是数组
+    if (!Array.isArray(tasks)) {
+      console.warn('Projects tasks不是数组:', tasks);
+      return 0;
+    }
+
     // 过滤出属于当前项目的任务
     const projectTasks = tasks.filter(task => task.project === projectId);
     console.log('当前项目的任务:', projectTasks);
@@ -306,16 +312,17 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
     if (!projects || !Array.isArray(projects)) {
       return [];
     }
-    
-    
+
+
     let filtered = [...projects];
-    
+
     // 按标签页过滤
     if (internalActiveTab === 'created') {
       filtered = filtered.filter(project => isProjectOwner(project));
     } else if (internalActiveTab === 'joined') {
       filtered = filtered.filter(project => isProjectMember(project) && !isProjectOwner(project));
     }
+    // 'all' 标签页显示所有项目，不进行过滤
     
     // 搜索过滤
     if (searchText) {

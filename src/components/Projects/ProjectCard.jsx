@@ -47,24 +47,57 @@ const ProjectCard = ({
     fetchTasks();
   }, [fetchTasks]);
 
-  // 计算项目的任务总占比 - 从 taskStore 中获取任务数据
+  // 计算项目的任务总占比 - 基于任务完成状态和权重计算
   const calculateTasksProgress = (projectId) => {
     console.log('ProjectCard 计算项目任务进度 - 项目ID:', projectId);
     console.log('ProjectCard 全部任务数据:', tasks);
+
+    // 确保tasks是数组
+    if (!Array.isArray(tasks)) {
+      console.warn('ProjectCard tasks不是数组:', tasks);
+      return 0;
+    }
 
     // 过滤出属于当前项目的任务
     const projectTasks = tasks.filter(task => task.project === projectId);
     console.log('ProjectCard 当前项目的任务:', projectTasks);
 
-    const totalProgress = projectTasks.reduce((total, task) => {
-      console.log('ProjectCard 任务:', task.title, '占比:', task.progress);
-      return total + (task.progress || 0);
-    }, 0);
+    if (projectTasks.length === 0) {
+      return 0;
+    }
 
-    // 确保总进度不超过100%
-    const clampedProgress = Math.min(totalProgress, 100);
-    console.log('ProjectCard 计算出的总进度:', totalProgress, '限制后的进度:', clampedProgress);
-    return clampedProgress;
+    // 方法1: 使用预估工时作为权重计算加权平均进度
+    const tasksWithHours = projectTasks.filter(task => task.estimated_hours && Number(task.estimated_hours) > 0);
+
+    if (tasksWithHours.length > 0) {
+      // 使用工时加权计算
+      let weightedProgress = 0;
+      let totalWeight = 0;
+
+      tasksWithHours.forEach(task => {
+        const hours = Number(task.estimated_hours || 0);
+        const progress = Number(task.progress || 0);
+        weightedProgress += (progress * hours);
+        totalWeight += hours;
+      });
+
+      const result = totalWeight > 0 ? Math.round(weightedProgress / totalWeight) : 0;
+      console.log('ProjectCard 使用工时加权计算的进度:', result);
+      return result;
+    }
+
+    // 方法2: 基于任务完成状态计算（如果没有工时信息）
+    const completedTasks = projectTasks.filter(task => task.status === 'completed').length;
+    const inProgressTasks = projectTasks.filter(task => task.status === 'in_progress').length;
+
+    // 已完成任务算100%，进行中任务算50%，其他算0%
+    const progressValue = Math.round(
+      ((completedTasks * 100) + (inProgressTasks * 50)) / projectTasks.length
+    );
+
+    console.log('ProjectCard 基于状态计算的进度:', progressValue,
+      `(完成:${completedTasks}, 进行中:${inProgressTasks}, 总计:${projectTasks.length})`);
+    return progressValue;
   };
 
   // 获取进度条颜色配置

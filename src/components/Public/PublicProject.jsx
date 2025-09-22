@@ -217,8 +217,10 @@ const PublicProject = () => {
     );
   }
 
-  const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const totalTasks = tasks.length;
+  // 确保tasks是数组
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const completedTasks = safeTasks.filter(task => task.status === 'completed').length;
+  const totalTasks = safeTasks.length;
   const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (

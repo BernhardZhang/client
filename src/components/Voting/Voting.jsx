@@ -170,6 +170,30 @@ const Voting = ({ projectId }) => {
   const hasUserParticipated = (sessionId) => {
     return userParticipatedSessions.has(sessionId);
   };
+
+  // 检查评分活动是否可以参与投票
+  const canParticipateInSession = (session) => {
+    // 如果活动状态是已完成，不允许参与
+    if (session.status === 'completed') {
+      return false;
+    }
+    // 如果用户已经参与过，不允许重复参与
+    if (hasUserParticipated(session.id)) {
+      return false;
+    }
+    return true;
+  };
+
+  // 获取评分活动的状态显示文本
+  const getSessionStatusText = (session) => {
+    if (session.status === 'completed') {
+      return '已结束';
+    }
+    if (hasUserParticipated(session.id)) {
+      return '已参与';
+    }
+    return '参与投票';
+  };
   
   const { user, isAuthenticated } = useAuthStore();
   const { projects, fetchProjects } = useProjectStore();
@@ -747,30 +771,30 @@ const Voting = ({ projectId }) => {
                       {/* 操作按钮 */}
                       <div style={{ display: 'flex', gap: 8 }}>
             <Button
-                          type={hasUserParticipated(session.id) ? "default" : "primary"}
+                          type={canParticipateInSession(session) ? "primary" : "default"}
               size="small"
                           onClick={() => handleParticipateVote(session)}
-                          disabled={hasUserParticipated(session.id)}
+                          disabled={!canParticipateInSession(session)}
                           style={{
                             borderRadius: 6,
                             height: 32,
                             fontSize: 12,
                             fontWeight: 500,
-                            background: hasUserParticipated(session.id)
-                              ? '#f5f5f5'
-                              : 'linear-gradient(135deg, #1890ff, #40a9ff)',
-                            border: hasUserParticipated(session.id) ? '1px solid #d9d9d9' : 'none',
-                            color: hasUserParticipated(session.id) ? '#bfbfbf' : 'white',
-                            boxShadow: hasUserParticipated(session.id)
-                              ? 'none'
-                              : '0 2px 4px rgba(24, 144, 255, 0.3)',
-                            cursor: hasUserParticipated(session.id) ? 'not-allowed' : 'pointer'
+                            background: canParticipateInSession(session)
+                              ? 'linear-gradient(135deg, #1890ff, #40a9ff)'
+                              : '#f5f5f5',
+                            border: canParticipateInSession(session) ? 'none' : '1px solid #d9d9d9',
+                            color: canParticipateInSession(session) ? 'white' : '#bfbfbf',
+                            boxShadow: canParticipateInSession(session)
+                              ? '0 2px 4px rgba(24, 144, 255, 0.3)'
+                              : 'none',
+                            cursor: canParticipateInSession(session) ? 'pointer' : 'not-allowed'
                           }}
                         >
                           <span style={{ marginRight: 4 }}>
-                            {hasUserParticipated(session.id) ? '✅' : '✋'}
+                            {session.status === 'completed' ? '🔒' : (hasUserParticipated(session.id) ? '✅' : '✋')}
                           </span>
-                          {hasUserParticipated(session.id) ? '已参与' : '参与投票'}
+                          {getSessionStatusText(session)}
             </Button>
                         <Button
                           size="small"
