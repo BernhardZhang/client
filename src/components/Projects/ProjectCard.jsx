@@ -49,8 +49,6 @@ const ProjectCard = ({
 
   // 计算项目的任务总占比 - 基于任务完成状态和权重计算
   const calculateTasksProgress = (projectId) => {
-    console.log('ProjectCard 计算项目任务进度 - 项目ID:', projectId);
-    console.log('ProjectCard 全部任务数据:', tasks);
 
     // 确保tasks是数组
     if (!Array.isArray(tasks)) {
@@ -60,7 +58,6 @@ const ProjectCard = ({
 
     // 过滤出属于当前项目的任务
     const projectTasks = tasks.filter(task => task.project === projectId);
-    console.log('ProjectCard 当前项目的任务:', projectTasks);
 
     if (projectTasks.length === 0) {
       return 0;
@@ -82,7 +79,6 @@ const ProjectCard = ({
       });
 
       const result = totalWeight > 0 ? Math.round(weightedProgress / totalWeight) : 0;
-      console.log('ProjectCard 使用工时加权计算的进度:', result);
       return result;
     }
 
@@ -95,8 +91,6 @@ const ProjectCard = ({
       ((completedTasks * 100) + (inProgressTasks * 50)) / projectTasks.length
     );
 
-    console.log('ProjectCard 基于状态计算的进度:', progressValue,
-      `(完成:${completedTasks}, 进行中:${inProgressTasks}, 总计:${projectTasks.length})`);
     return progressValue;
   };
 
@@ -118,14 +112,6 @@ const ProjectCard = ({
 
     return '#52c41a'; // 绿色：任务完成部分
   };
-
-  // 调试信息
-  console.log('ProjectCard received project:', project);
-  console.log('Project name:', project?.name);
-  console.log('Project owner:', project?.owner);
-  console.log('isOwner:', isOwner);
-  console.log('onDelete function:', onDelete);
-  console.log('Delete button should be visible:', isOwner);
 
   // 处理删除操作
   const handleDeleteClick = (e) => {

@@ -108,8 +108,6 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
   // 计算项目的任务总占比 - 从 taskStore 中获取任务数据
   const calculateTasksProgress = (projectId) => {
-    console.log('计算项目任务进度 - 项目ID:', projectId);
-    console.log('全部任务数据:', tasks);
 
     // 确保tasks是数组
     if (!Array.isArray(tasks)) {
@@ -119,10 +117,8 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
 
     // 过滤出属于当前项目的任务
     const projectTasks = tasks.filter(task => task.project === projectId);
-    console.log('当前项目的任务:', projectTasks);
 
     const totalProgress = projectTasks.reduce((total, task) => {
-      console.log('任务:', task.title, '占比:', task.progress);
       return total + (task.progress || 0);
     }, 0);
 
@@ -573,13 +569,6 @@ const Projects = ({ onProjectSelect, projects: propProjects, viewMode = 'card', 
   };
 
   const isProjectOwner = (project) => {
-    console.log('isProjectOwner检查:', {
-      user: user,
-      userId: user?.id,
-      projectOwner: project.owner,
-      projectName: project.name,
-      isOwner: user && project.owner && project.owner === user.id
-    });
     if (!user || !project.owner) return false;
     return project.owner === user.id;
   };

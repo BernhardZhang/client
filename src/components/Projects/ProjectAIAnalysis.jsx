@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Row, Col, Input, Button, Upload, List, Avatar, Space, Typography, message, Tag, Popconfirm, Tooltip, Modal, Image } from 'antd';
-import { UploadOutlined, SendOutlined, RobotOutlined, UserOutlined, PaperClipOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, ReloadOutlined, FileImageOutlined, FileOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Input, Button, Upload, List, Avatar, Space, Typography, message, Tag, Popconfirm, Tooltip, Modal, Image, Spin, Alert } from 'antd';
+import { UploadOutlined, SendOutlined, RobotOutlined, UserOutlined, PaperClipOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, ReloadOutlined, FileImageOutlined, FileOutlined, DatabaseOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import cozeService from '../../services/cozeService';
+import projectDetailsService from '../../services/projectDetailsService';
 import useAuthStore from '../../stores/authStore';
 
 const { TextArea } = Input;
@@ -11,8 +12,9 @@ const { Text } = Typography;
 const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
   const { user } = useAuthStore();
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: '你好，我是基于Coze智能体的项目AI助手。你可以上传项目相关文件并向我提问，我会结合上下文进行智能分析。' }
+    { role: 'assistant', content: '你好，我是基于Coze智能体的项目AI助手。我正在为您准备项目详情数据，稍后您就可以向我提问项目相关的任何问题。' }
   ]);
+  const [displayMessages, setDisplayMessages] = useState([]); // 用于显示的消息，不包括背景消息
   const [input, setInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -23,11 +25,39 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const uploadedFilesRef = useRef([]);
 
-  // 组件加载时恢复对话历史和文件列表
+  // 项目详情相关状态
+  const [projectDetails, setProjectDetails] = useState(null);
+  const [loadingProjectDetails, setLoadingProjectDetails] = useState(false);
+  const [projectDetailsError, setProjectDetailsError] = useState(null);
+  const [projectDetailsLoaded, setProjectDetailsLoaded] = useState(false);
+  const [projectDetailsSentToAI, setProjectDetailsSentToAI] = useState(false);
+  const [showProjectSummary, setShowProjectSummary] = useState(false);
+
+  // 组件加载时恢复对话历史和文件列表，并自动生成项目详情
   useEffect(() => {
+    // 重置所有状态，确保切换项目时清除之前的数据
+    setMessages([
+      { role: 'assistant', content: '你好，我是基于Coze智能体的项目AI助手。我正在为您准备项目详情数据，稍后您就可以向我提问项目相关的任何问题。' }
+    ]);
+    setDisplayMessages([]); // 初始化显示消息为空，等待用户真正开始对话
+    setConversationId(null);
+    setUploadedFiles([]);
+    uploadedFilesRef.current = [];
+    setProjectDetails(null);
+    setProjectDetailsLoaded(false);
+    setProjectDetailsSentToAI(false);
+    setProjectDetailsError(null);
+
     const savedConversation = cozeService.loadConversationFromLocal(projectId);
     if (savedConversation && savedConversation.messages && savedConversation.messages.length > 1) {
       setMessages(savedConversation.messages);
+      // 过滤掉系统消息，只显示用户和AI的真实对话
+      const userMessages = savedConversation.messages.filter(msg =>
+        !msg.content.includes('[系统消息]') &&
+        !msg.content.includes('项目详情数据') &&
+        !msg.content.includes('我已经了解了项目详情')
+      );
+      setDisplayMessages(userMessages);
       setConversationId(savedConversation.conversationId);
     }
 
@@ -38,7 +68,119 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
       uploadedFilesRef.current = savedFiles;
       console.log(`已恢复 ${savedFiles.length} 个文件`);
     }
+
+    // 自动生成项目详情
+    generateProjectDetails();
   }, [projectId]);
+
+  // 在后台发送项目详情给AI，不在界面显示
+  const sendProjectDetailsToAI = async (projectDetails) => {
+    if (projectDetailsSentToAI || !projectDetails || !projectDetails.structuredContent) {
+      return;
+    }
+
+    try {
+      console.log('开始向AI发送项目详情数据...');
+      const userId = user?.id?.toString() || user?.username || `user_${Date.now()}`;
+
+      // 将结构化数据转换为AI易理解的格式
+      const projectDetailsMessage = `[项目详情数据] 项目"${projectDetails.projectName}"的完整信息：
+
+${JSON.stringify(projectDetails.structuredContent, null, 2)}
+
+这是项目的完整结构化数据，包含了项目基本信息、团队情况、任务执行、投票评价、功分分配等所有重要信息。请基于这些数据回答用户的问题和分析需求。`;
+
+      // 使用Coze API发送项目详情，使用空的回调确保不更新界面
+      const result = await cozeService.chatStream(projectDetailsMessage, [], userId, [], conversationId, (deltaContent, isCompleted) => {
+        // 完全静默处理，不更新任何界面元素
+        if (isCompleted) {
+          console.log('项目详情背景数据发送完成');
+        }
+      });
+
+      if (result && result.conversationId) {
+        setConversationId(result.conversationId);
+        setProjectDetailsSentToAI(true);
+        console.log('项目详情已成功发送给AI，对话ID:', result.conversationId);
+      }
+
+    } catch (error) {
+      console.error('发送项目详情给AI失败:', error);
+      // 不显示错误信息给用户，因为这是后台操作
+    }
+  };
+
+  // 生成项目详情
+  const generateProjectDetails = async () => {
+    if (loadingProjectDetails) return;
+
+    setLoadingProjectDetails(true);
+    setProjectDetailsError(null);
+
+    try {
+      console.log(`开始为项目 ${projectId} 生成详情数据`);
+
+      const result = await projectDetailsService.exportProjectDetails(projectId);
+
+      if (result.success) {
+        setProjectDetails(result);
+        setProjectDetailsLoaded(true);
+
+        // 更新初始消息，告知用户项目数据已准备完成
+        const projectSummary = projectDetailsService.generateProjectSummary(result);
+        const welcomeMessage = `你好！我已经为您准备好了项目"${result.projectName}"的完整详情数据。
+
+项目概况：${projectSummary}
+
+数据包含：${projectDetailsService.formatDataSummary(result.dataSummary)}
+
+现在您可以向我提问任何关于项目的问题，比如：
+• 项目的进度如何？
+• 团队成员的工作分配情况？
+• 项目存在什么风险？
+• 如何优化项目管理？
+
+我会基于项目的实际数据为您提供准确的分析和建议。`;
+
+        // 更新显示消息，向用户显示项目准备就绪的消息
+        setDisplayMessages([{ role: 'assistant', content: welcomeMessage }]);
+
+        message.success(`项目详情数据已生成完成！包含${projectDetailsService.formatDataSummary(result.dataSummary)}`);
+
+        console.log('项目详情生成成功:', {
+          projectName: result.projectName,
+          dataSummary: result.dataSummary,
+          markdownLength: result.markdownContent?.length || 0
+        });
+
+        // 在后台发送项目详情给AI，不在界面显示
+        await sendProjectDetailsToAI(result);
+
+      } else {
+        throw new Error('项目详情生成失败');
+      }
+    } catch (error) {
+      console.error('生成项目详情失败:', error);
+      setProjectDetailsError(error.message);
+
+      // 显示错误消息
+      const errorMessage = `抱歉，项目详情数据加载失败：${error.message}
+
+您仍然可以上传文件或直接向我提问，我会尽力协助您进行项目分析。`;
+
+      setDisplayMessages([{ role: 'assistant', content: errorMessage }]);
+
+      message.error(`项目详情生成失败：${error.message}`);
+    } finally {
+      setLoadingProjectDetails(false);
+    }
+  };
+
+  // 手动重新生成项目详情
+  const regenerateProjectDetails = async () => {
+    setProjectDetailsLoaded(false);
+    await generateProjectDetails();
+  };
 
   // 保存对话历史到本地存储
   const saveConversationHistory = (newMessages, convId) => {
@@ -53,15 +195,55 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
   };
 
   // 开始新对话
-  const startNewConversation = () => {
-    const initialMessage = { role: 'assistant', content: '你好，我是基于Coze智能体的项目AI助手。你可以上传项目相关文件并向我提问，我会结合上下文进行智能分析。' };
-    setMessages([initialMessage]);
-    setConversationId(null);
-    setLastChatId(null);
-    setUploadedFiles([]);
-    uploadedFilesRef.current = [];
-    cozeService.clearAllDataFromLocal(projectId);
-    message.success('已开始新对话，文件已清空');
+  const startNewConversation = async () => {
+    try {
+      // 如果存在旧对话，先尝试取消它
+      if (conversationId && lastChatId) {
+        try {
+          console.log('正在取消旧对话:', { conversationId, chatId: lastChatId });
+          await cozeService.cancelChat(conversationId, lastChatId);
+          console.log('旧对话已取消');
+        } catch (error) {
+          console.warn('取消旧对话失败，但不影响创建新对话:', error);
+          // 不阻止新对话的创建，只是记录警告
+        }
+      }
+
+      // 清空当前对话状态
+      const initialMessage = { role: 'assistant', content: '你好，我是基于Coze智能体的项目AI助手。我正在为您准备项目详情数据，稍后您就可以向我提问项目相关的任何问题。' };
+      setMessages([initialMessage]);
+      setDisplayMessages([]); // 清空显示消息，重新开始
+      setConversationId(null);
+      setLastChatId(null);
+      setUploadedFiles([]);
+      uploadedFilesRef.current = [];
+      setProjectDetailsSentToAI(false);
+      cozeService.clearAllDataFromLocal(projectId);
+
+      message.success('已开始新对话，文件已清空，旧对话已取消');
+
+      // 重新发送项目详情给AI
+      if (projectDetails && projectDetails.markdownContent) {
+        await sendProjectDetailsToAI(projectDetails);
+      }
+
+      // 如果项目详情已经加载，重新显示欢迎消息
+      if (projectDetailsLoaded && projectDetails) {
+        const projectSummary = projectDetailsService.generateProjectSummary(projectDetails);
+        const welcomeMessage = `你好！我已经为您准备好了项目"${projectDetails.projectName}"的完整详情数据。
+
+项目概况：${projectSummary}
+
+数据包含：${projectDetailsService.formatDataSummary(projectDetails.dataSummary)}
+
+现在您可以向我提问任何关于项目的问题，我会基于项目的实际数据为您提供准确的分析和建议。`;
+
+        setDisplayMessages([{ role: 'assistant', content: welcomeMessage }]);
+      }
+    } catch (error) {
+      console.error('创建新对话失败:', error);
+      message.error('创建新对话失败：' + error.message);
+    }
   };
 
   // 从Coze API获取对话历史
@@ -83,9 +265,19 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           content: msg.content || msg.text || '消息内容获取失败'
         }));
 
+        // 保存所有消息（包括系统消息）
         setMessages(formattedMessages);
+
+        // 过滤掉系统消息，只显示用户和AI的真实对话
+        const userMessages = formattedMessages.filter(msg =>
+          !msg.content.includes('[系统消息]') &&
+          !msg.content.includes('项目详情数据') &&
+          !msg.content.includes('我已经了解了项目详情')
+        );
+        setDisplayMessages(userMessages);
+
         saveConversationHistory(formattedMessages, conversationId);
-        message.success(`已恢复 ${formattedMessages.length} 条历史消息`);
+        message.success(`已恢复 ${userMessages.length} 条历史消息`);
       } else {
         message.info('未找到历史消息');
       }
@@ -322,14 +514,20 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
     const content = input.trim();
     if (!content) return;
     setSending(true);
-    const newMessages = [...messages, { role: 'user', content }];
+
+    // 用户的消息添加到所有消息列表和显示消息列表
+    const userMessage = { role: 'user', content };
+    const newMessages = [...messages, userMessage];
     setMessages(newMessages);
+
+    const newDisplayMessages = [...displayMessages, userMessage];
+    setDisplayMessages(newDisplayMessages);
     setInput('');
 
-    // 添加一个空的助手消息，用于流式更新
-    const assistantMessageIndex = newMessages.length;
-    const messagesWithAssistant = [...newMessages, { role: 'assistant', content: '' }];
-    setMessages(messagesWithAssistant);
+    // 添加一个空的助手消息用于流式更新
+    const assistantMessageIndex = newDisplayMessages.length;
+    const displayWithAssistant = [...newDisplayMessages, { role: 'assistant', content: '' }];
+    setDisplayMessages(displayWithAssistant);
 
     try {
       const userId = user?.id?.toString() || user?.username || `user_${Date.now()}`;
@@ -346,8 +544,8 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
           return;
         }
 
-        // 实时更新助手消息内容
-        setMessages(prevMessages => {
+        // 实时更新显示的助手消息内容
+        setDisplayMessages(prevMessages => {
           const updated = [...prevMessages];
           if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
             updated[assistantMessageIndex] = {
@@ -359,27 +557,23 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
         });
       };
 
-      const result = await cozeService.chatStream(content, messages, userId, cozeFiles, conversationId, onMessageCallback);
+      // 直接发送用户消息给Coze API
+      const result = await cozeService.chatStream(content, [], userId, cozeFiles, conversationId, onMessageCallback);
 
       if (result && result.content) {
         // 更新状态
         setConversationId(result.conversationId);
         setLastChatId(result.chatId);
 
-        // 确保最终消息内容正确
-        setMessages(prevMessages => {
-          const updated = [...prevMessages];
-          if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
-            updated[assistantMessageIndex] = {
-              ...updated[assistantMessageIndex],
-              content: result.content
-            };
-          }
-          return updated;
-        });
+        // 确保最终消息内容正确，同时更新messages和displayMessages
+        const assistantMessage = { role: 'assistant', content: result.content };
+        const finalMessages = [...newMessages, assistantMessage];
+        const finalDisplayMessages = [...newDisplayMessages, assistantMessage];
 
-        // 保存对话历史
-        const finalMessages = [...newMessages, { role: 'assistant', content: result.content }];
+        setMessages(finalMessages);
+        setDisplayMessages(finalDisplayMessages);
+
+        // 保存对话历史（包含所有消息，包括系统消息）
         saveConversationHistory(finalMessages, result.conversationId);
 
         console.log('Coze流式API调用成功，对话ID:', result.conversationId);
@@ -419,7 +613,7 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
 
 详细错误信息请查看浏览器控制台。`;
 
-      setMessages(prevMessages => {
+      setDisplayMessages(prevMessages => {
         const updated = [...prevMessages];
         if (updated[assistantMessageIndex] && updated[assistantMessageIndex].role === 'assistant') {
           updated[assistantMessageIndex] = {
@@ -443,6 +637,27 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Space>
                   <span>AI聊天</span>
+                  {loadingProjectDetails && (
+                    <Tooltip title="正在加载项目详情数据">
+                      <Tag icon={<Spin size="small" />} color="processing" size="small">
+                        加载项目数据
+                      </Tag>
+                    </Tooltip>
+                  )}
+                  {projectDetailsLoaded && projectDetails && (
+                    <Tooltip title={`项目数据已加载：${projectDetailsService.formatDataSummary(projectDetails.dataSummary)}`}>
+                      <Tag icon={<DatabaseOutlined />} color="success" size="small">
+                        项目数据已就绪
+                      </Tag>
+                    </Tooltip>
+                  )}
+                  {projectDetailsError && (
+                    <Tooltip title={`项目数据加载失败：${projectDetailsError}`}>
+                      <Tag color="error" size="small">
+                        数据加载失败
+                      </Tag>
+                    </Tooltip>
+                  )}
                   {conversationId && (
                     <Tooltip title={`对话ID: ${conversationId}`}>
                       <Tag icon={<HistoryOutlined />} color="blue" size="small">
@@ -451,23 +666,38 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
                     </Tooltip>
                   )}
                 </Space>
-                <Tooltip title="开始新对话">
-                  <Button
-                    type="text"
-                    icon={<PlusOutlined />}
-                    size="small"
-                    onClick={startNewConversation}
-                  >
-                    新对话
-                  </Button>
-                </Tooltip>
+                <Space>
+                  {projectDetailsError && (
+                    <Tooltip title="重新加载项目数据">
+                      <Button
+                        type="text"
+                        icon={<ReloadOutlined />}
+                        size="small"
+                        onClick={regenerateProjectDetails}
+                        loading={loadingProjectDetails}
+                      >
+                        重新加载
+                      </Button>
+                    </Tooltip>
+                  )}
+                  <Tooltip title="开始新对话">
+                    <Button
+                      type="text"
+                      icon={<PlusOutlined />}
+                      size="small"
+                      onClick={startNewConversation}
+                    >
+                      新对话
+                    </Button>
+                  </Tooltip>
+                </Space>
               </div>
             }
             bodyStyle={{ height: 480, display: 'flex', flexDirection: 'column', padding: 0 }}
           >
             <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
               <List
-                dataSource={messages}
+                dataSource={displayMessages}
                 renderItem={(m, idx) => (
                   <List.Item key={idx} style={{ border: 'none', padding: '8px 0' }}>
                     <List.Item.Meta
@@ -483,7 +713,7 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
                       description={
                         <div style={{ whiteSpace: 'pre-wrap' }}>
                           {m.content}
-                          {m.role === 'assistant' && m.content !== '' && sending && idx === messages.length - 1 && (
+                          {m.role === 'assistant' && m.content !== '' && sending && idx === displayMessages.length - 1 && (
                             <span style={{ color: '#1890ff' }}>▍</span>
                           )}
                         </div>
@@ -584,7 +814,7 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ fontSize: '12px', color: '#666' }}>消息数量：</Text>
-                <Text style={{ fontSize: '12px' }}>{messages.length}</Text>
+                <Text style={{ fontSize: '12px' }}>{displayMessages.length}</Text>
               </div>
 
               {conversationId && (
@@ -650,7 +880,8 @@ const ProjectAIAnalysis = ({ projectId, isProjectOwner }) => {
             <Text strong>对话信息：</Text>
             <div style={{ marginTop: 8, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
               <div><Text type="secondary">项目ID：</Text>{projectId}</div>
-              <div><Text type="secondary">消息数量：</Text>{messages.length}</div>
+              <div><Text type="secondary">显示消息：</Text>{displayMessages.length}</div>
+              <div><Text type="secondary">总消息数：</Text>{messages.length}</div>
               {conversationId && (
                 <>
                   <div><Text type="secondary">对话ID：</Text>{conversationId}</div>

@@ -92,12 +92,23 @@ class CozeService {
     console.log('Coze API流式请求消息:', JSON.stringify(messages, null, 2));
 
     try {
-      // 使用SDK的流式方法，参考您提供的JavaScript示例
-      const streamResponse = await this.apiClient.chat.stream({
+      // 构建请求参数，包含conversation_id以复用对话
+      const streamParams = {
         bot_id: config.bot_id,
         user_id: actualUserId,
+          auto_save_history: true,
         additional_messages: messages
-      });
+      };
+
+      // 如果有conversation_id，添加到参数中以复用对话
+      if (conversationId) {
+        streamParams.conversation_id = conversationId;
+      }
+
+      console.log('Coze API流式请求参数:', streamParams);
+
+      // 使用SDK的流式方法，参考您提供的JavaScript示例
+      const streamResponse = await this.apiClient.chat.stream(streamParams);
 
       let fullContent = '';
       let conversationIdFromResponse = null;
@@ -105,7 +116,6 @@ class CozeService {
 
       // 处理流式响应，参考SDK文档的异步迭代器模式
       for await (const chunk of streamResponse) {
-        console.log('流式数据块:', chunk);
 
         // 处理不同类型的流式事件
         if (chunk.event === 'conversation.message.delta' && chunk.data?.content) {
@@ -281,6 +291,38 @@ class CozeService {
   clearConversationFromLocal(projectId) {
     const key = `coze_conversation_${projectId}`;
     localStorage.removeItem(key);
+  }
+
+  async cancelChat(conversationId, chatId) {
+    const config = await this.ensureConfig();
+    if (!config || !this.apiClient) {
+      throw new Error('Coze configuration not loaded');
+    }
+
+    try {
+      // 调用Coze API取消对话
+      const cancelResult = await fetch('https://api.coze.cn/v3/chat/cancel', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          conversation_id: conversationId
+        })
+      });
+
+      if (!cancelResult.ok) {
+        const error = await cancelResult.text();
+        throw new Error(`取消对话失败: ${error}`);
+      }
+
+      return await cancelResult.json();
+    } catch (error) {
+      console.error('Cancel chat failed:', error);
+      throw error;
+    }
   }
 
   // 文件持久化方法
