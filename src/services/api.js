@@ -1,50 +1,76 @@
 import axios from 'axios';
 
-// Function to load config
-const loadConfig = async () => {
-    const response = await fetch('/config.json');
-    const config = await response.json();
-    return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
+// 全局配置状态
+let apiBaseURL = '/api'; // 默认相对路径
+let configLoaded = false;
+
+// 同步加载配置并立即设置
+const loadConfigSync = async () => {
+    try {
+        const response = await fetch('/config.json');
+        const config = await response.json();
+        console.log('Loaded config:', config);
+
+        if (config.API_BASE_URL) {
+            apiBaseURL = config.API_BASE_URL;
+            console.log('Set API base URL to:', apiBaseURL);
+            return config.API_BASE_URL;
+        } else {
+            return config.API_BASE_URL || `http://${config.SERVER_HOST}:${config.SERVER_PORT}/api`;
+        }
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        throw error;
+    }
 };
 
-// Create axios instance with default URL (will be updated after config loads)
+// 立即加载配置
+const configPromise = loadConfigSync().then(baseURL => {
+    configLoaded = true;
+    return baseURL;
+}).catch(error => {
+    console.error('Config loading failed:', error);
+    configLoaded = true;
+    return '/api'; // 失败时保持相对路径
+});
+
+// Create axios instance - 不设置baseURL
 const api = axios.create({
-  baseURL: '/api', // Default to relative path, will be updated by initializeAPI
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Initialize API base URL
-const initializeAPI = async () => {
-  try {
-    const baseURL = await loadConfig();
-    api.defaults.baseURL = baseURL;
-    console.log('API initialized with base URL:', baseURL);
-  } catch (error) {
-    console.error('Failed to initialize API:', error);
-  }
-};
-
-// Initialize configuration on import
-initializeAPI();
-
-// Request interceptor to add auth token
+// 重写request interceptor，确保每次请求都使用正确的baseURL
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // 等待配置加载完成
+    if (!configLoaded) {
+        await configPromise;
+    }
+
+    // 强制设置正确的baseURL
+    if (!config.baseURL) {
+        config.baseURL = apiBaseURL;
+    }
+
+    console.log('Request interceptor: 使用baseURL:', config.baseURL);
+    console.log('Request interceptor: 完整URL:', config.baseURL + config.url);
+
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Token ${token}`;
     }
-    
+
     // 如果数据是FormData，移除Content-Type让浏览器自动设置
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     }
-    
+
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
