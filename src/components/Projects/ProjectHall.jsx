@@ -62,6 +62,8 @@ import dayjs from 'dayjs';
 import LoginPrompt from '../Auth/LoginPrompt';
 import useAuthStore from '../../stores/authStore';
 import useProjectStore from '../../stores/projectStore';
+import useTaskStore from '../../stores/taskStore';
+import cozeService from '../../services/cozeService';
 import api from '../../services/api';
 import './ProjectHall.css';
 
@@ -95,11 +97,19 @@ const ProjectHall = () => {
   const [investAmount, setInvestAmount] = useState(0);
   const [agreeRisk, setAgreeRisk] = useState(false);
   const [investSubmitting, setInvestSubmitting] = useState(false);
-  
+  const [aiAnalysisResults, setAiAnalysisResults] = useState({}); // 存储AI分析结果
+  const [projectAnalysisState, setProjectAnalysisState] = useState('');
+  const [projectAnalysisLoading, setProjectAnalysisLoading] = useState(true);
+  const [teamCollaborationState, setTeamCollaborationState] = useState('');
+  const [teamCollaborationLoading, setTeamCollaborationLoading] = useState(true);
+  const [taskOverviewAnalysisState, setTaskOverviewAnalysisState] = useState('');
+  const [taskOverviewAnalysisLoading, setTaskOverviewAnalysisLoading] = useState(true);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAuthenticated, updateProfile } = useAuthStore();
   const { fetchProjects } = useProjectStore();
+  const { tasks, fetchTasks } = useTaskStore();
 
   // 获取公开项目数据
   const fetchPublicProjects = async (page = 1, pageSize = 12) => {
@@ -128,11 +138,496 @@ const ProjectHall = () => {
 
   useEffect(() => {
     fetchPublicProjects();
+    fetchTasks(); // 获取任务数据
   }, []);
+
+  // Handle AI analysis when viewing project changes
+  useEffect(() => {
+    if (viewingProject) {
+      setProjectAnalysisLoading(true);
+      setTeamCollaborationLoading(true);
+      setTaskOverviewAnalysisLoading(true);
+
+      getAIAnalysisResults(viewingProject.id)
+        .then(results => {
+          setProjectAnalysisState(results.projectAnalysis);
+          setTeamCollaborationState(results.teamCollaboration);
+          setTaskOverviewAnalysisState(results.taskOverviewAnalysis);
+          setProjectAnalysisLoading(false);
+          setTeamCollaborationLoading(false);
+          setTaskOverviewAnalysisLoading(false);
+        })
+        .catch(error => {
+          console.error('获取AI分析失败:', error);
+          const tasksOverview = getTasksOverview(viewingProject.id);
+          setProjectAnalysisState(generateProjectAnalysis(viewingProject, tasksOverview));
+          setTeamCollaborationState(generateTeamCollaboration(viewingProject, tasksOverview));
+          setTaskOverviewAnalysisState(generateTaskOverviewAnalysis(viewingProject, tasksOverview));
+          setProjectAnalysisLoading(false);
+          setTeamCollaborationLoading(false);
+          setTaskOverviewAnalysisLoading(false);
+        });
+    }
+  }, [viewingProject?.id]);
 
   // 添加一个刷新公开项目的处理函数
   const handleRefreshProjects = () => {
     fetchPublicProjects();
+  };
+
+  // 计算项目的任务进度 - 与Projects.jsx保持一致
+  const calculateTasksProgress = (projectId) => {
+    if (!Array.isArray(tasks)) {
+      return 0;
+    }
+
+    const projectTasks = tasks.filter(task => task.project === projectId);
+    const totalProgress = projectTasks.reduce((total, task) => {
+      return total + (task.progress || 0);
+    }, 0);
+
+    return Math.min(totalProgress, 100);
+  };
+
+  // 计算项目的团队成员总数（任务参与者并集）
+  const calculateTeamMembersCount = (projectId) => {
+    if (!Array.isArray(tasks)) {
+      return 0;
+    }
+
+    const projectTasks = tasks.filter(task => task.project === projectId);
+    const memberIds = new Set();
+
+    projectTasks.forEach(task => {
+      if (task.assignee) {
+        memberIds.add(task.assignee);
+      }
+      if (task.participants && Array.isArray(task.participants)) {
+        task.participants.forEach(participant => {
+          memberIds.add(participant.id || participant);
+        });
+      }
+    });
+
+    return memberIds.size;
+  };
+
+  // 获取项目的任务概览数据
+  const getTasksOverview = (projectId) => {
+    if (!Array.isArray(tasks)) {
+      return { tasks: [], completed: 0, total: 0 };
+    }
+
+    const projectTasks = tasks.filter(task => task.project === projectId);
+    const completed = projectTasks.filter(task => task.status === 'completed').length;
+
+    return {
+      tasks: projectTasks,
+      completed,
+      total: projectTasks.length,
+      percentage: projectTasks.length > 0 ? Math.round((completed / projectTasks.length) * 100) : 0
+    };
+  };
+
+  // 生成AI分析内容
+  const generateProjectAnalysis = (project, tasksOverview) => {
+    const progress = calculateTasksProgress(project.id);
+    const teamSize = calculateTeamMembersCount(project.id);
+
+    let analysis = [];
+
+    if (progress >= 80) {
+      analysis.push("项目进度良好，即将完成。");
+    } else if (progress >= 50) {
+      analysis.push("项目进展顺利，已完成大部分工作。");
+    } else if (progress >= 20) {
+      analysis.push("项目正在积极推进中。");
+    } else {
+      analysis.push("项目刚刚起步，需要加快推进速度。");
+    }
+
+    if (teamSize >= 5) {
+      analysis.push("团队规模较大，协作能力强。");
+    } else if (teamSize >= 2) {
+      analysis.push("团队规模适中，便于管理。");
+    } else {
+      analysis.push("团队规模较小，需要更多成员参与。");
+    }
+
+    if (tasksOverview.total > 10) {
+      analysis.push("任务分解详细，项目规划清晰。");
+    } else if (tasksOverview.total > 5) {
+      analysis.push("任务规划合理，执行步骤明确。");
+    } else {
+      analysis.push("任务较少，可能需要进一步细分。");
+    }
+
+    return analysis.join(" ");
+  };
+
+  // 生成团队合作分析
+  const generateTeamCollaboration = (project, tasksOverview) => {
+    const teamSize = calculateTeamMembersCount(project.id);
+    const completionRate = tasksOverview.percentage;
+
+    let collaboration = [];
+
+    if (completionRate >= 70) {
+      collaboration.push("团队执行力强，任务完成效率高。");
+    } else if (completionRate >= 40) {
+      collaboration.push("团队协作良好，项目推进稳定。");
+    } else {
+      collaboration.push("团队需要加强协作，提高执行效率。");
+    }
+
+    if (teamSize >= 3) {
+      collaboration.push("成员分工明确，协作配合默契。");
+    } else {
+      collaboration.push("团队成员较少，每个人承担多项职责。");
+    }
+
+    if (tasksOverview.total > 0) {
+      const avgTasksPerMember = teamSize > 0 ? Math.round(tasksOverview.total / teamSize) : 0;
+      if (avgTasksPerMember > 3) {
+        collaboration.push("任务分配均衡，工作负荷适中。");
+      } else if (avgTasksPerMember > 1) {
+        collaboration.push("任务分配相对均衡。");
+      } else {
+        collaboration.push("部分成员可能承担更多工作。");
+      }
+    }
+
+    return collaboration.join(" ");
+  };
+
+  // 获取进度条颜色配置 - 与Projects.jsx保持一致
+  const getProgressStrokeColor = (tasksProgress) => {
+    if (tasksProgress === 100) {
+      return '#1890ff'; // 蓝色：项目完成
+    }
+
+    // 如果任务总和小于100%，显示分段颜色
+    if (tasksProgress < 100) {
+      return {
+        '0%': '#52c41a',  // 绿色：任务完成部分
+        [`${tasksProgress}%`]: '#52c41a',
+        [`${tasksProgress + 0.1}%`]: '#faad14', // 黄色：未分配部分
+        '100%': '#faad14'
+      };
+    }
+
+    return '#52c41a'; // 绿色：任务完成部分
+  };
+
+  // 调用Coze进行项目分析
+  const generateAIProjectAnalysis = async (project, tasksOverview) => {
+    try {
+      const projectData = {
+        name: project.name,
+        description: project.description,
+        progress: calculateTasksProgress(project.id),
+        teamSize: calculateTeamMembersCount(project.id),
+        totalTasks: tasksOverview.total,
+        completedTasks: tasksOverview.completed,
+        completionRate: tasksOverview.percentage,
+        status: project.status,
+        tags: project.tags || []
+      };
+
+      console.log('开始Coze项目分析，项目数据:', projectData);
+
+      // 构建分析提示
+      const prompt = `请分析以下项目数据并提供专业的项目分析报告：
+
+项目名称: ${projectData.name}
+项目描述: ${projectData.description || '无描述'}
+项目进度: ${projectData.progress}%
+团队规模: ${projectData.teamSize}人
+任务总数: ${projectData.totalTasks}个
+已完成任务: ${projectData.completedTasks}个
+完成率: ${projectData.completionRate}%
+项目状态: ${projectData.status}
+项目标签: ${projectData.tags.join(', ') || '无标签'}
+
+请从以下角度提供分析：
+1. 项目进度评估
+2. 团队配置分析
+3. 任务规划合理性
+4. 项目风险识别
+5. 改进建议
+
+请用中文回复，控制在150字以内，语言简洁专业。`;
+
+      let analysisResult = '';
+      let conversationId = null;
+
+      // 使用Coze API进行分析
+      const result = await cozeService.chatStream(
+        prompt,
+        [],
+        `user_${Date.now()}`,
+        [],
+        null,
+        (deltaContent, isCompleted) => {
+          if (deltaContent) {
+            analysisResult += deltaContent;
+          }
+        }
+      );
+
+      conversationId = result.conversationId;
+      console.log('Coze项目分析完成，对话ID:', conversationId);
+
+      // 及时关闭对话
+      if (conversationId) {
+        try {
+          await cozeService.cancelChat(conversationId, result.chatId);
+          console.log('Coze项目分析对话已关闭');
+        } catch (closeError) {
+          console.warn('关闭Coze项目分析对话失败:', closeError);
+        }
+      }
+
+      return analysisResult || '项目分析已完成，具体分析结果请查看详细报告。';
+
+    } catch (error) {
+      console.error('Coze项目分析失败:', error);
+      // 如果Coze分析失败，返回基于规则的分析
+      return generateProjectAnalysis(project, tasksOverview);
+    }
+  };
+
+  // 调用Coze进行任务概览分析
+  const generateAITaskOverviewAnalysis = async (project, tasksOverview) => {
+    try {
+      const taskData = {
+        projectName: project.name,
+        totalTasks: tasksOverview.total,
+        completedTasks: tasksOverview.completed,
+        completionRate: tasksOverview.percentage,
+        taskDetails: tasksOverview.tasks.map(task => ({
+          title: task.title,
+          status: task.status,
+          progress: task.progress || 0,
+          priority: task.priority || '中',
+          assignee: task.assignee_name || '未分配',
+          dueDate: task.due_date || '未设置',
+          description: task.description ? task.description.substring(0, 50) : '无描述'
+        })).slice(0, 10) // 只分析前10个任务
+      };
+
+      console.log('开始Coze任务概览分析，任务数据:', taskData);
+
+      const prompt = `请分析以下项目的任务概览数据：
+
+项目名称: ${taskData.projectName}
+任务总数: ${taskData.totalTasks}个
+已完成任务: ${taskData.completedTasks}个
+完成率: ${taskData.completionRate}%
+
+主要任务详情:
+${taskData.taskDetails.map((task, idx) =>
+  `${idx + 1}. ${task.title} - 状态:${task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待开始'}, 进度:${task.progress}%, 负责人:${task.assignee}`
+).join('\n')}
+
+请从以下角度分析任务执行情况：
+1. 任务完成质量评估
+2. 任务分配合理性
+3. 执行进度健康度
+4. 潜在瓶颈识别
+5. 优化改进建议
+
+请用中文回复，控制在120字以内，语言简洁专业。`;
+
+      let analysisResult = '';
+      let conversationId = null;
+
+      // 使用Coze API进行分析
+      const result = await cozeService.chatStream(
+        prompt,
+        [],
+        `user_${Date.now()}`,
+        [],
+        null,
+        (deltaContent, isCompleted) => {
+          if (deltaContent) {
+            analysisResult += deltaContent;
+          }
+        }
+      );
+
+      conversationId = result.conversationId;
+      console.log('Coze任务概览分析完成，对话ID:', conversationId);
+
+      // 及时关闭对话
+      if (conversationId) {
+        try {
+          await cozeService.cancelChat(conversationId, result.chatId);
+          console.log('Coze任务概览分析对话已关闭');
+        } catch (closeError) {
+          console.warn('关闭Coze任务概览分析对话失败:', closeError);
+        }
+      }
+
+      return analysisResult || '任务概览分析已完成，项目任务执行情况良好。';
+
+    } catch (error) {
+      console.error('Coze任务概览分析失败:', error);
+      // 如果Coze分析失败，返回基于规则的分析
+      return generateTaskOverviewAnalysis(project, tasksOverview);
+    }
+  };
+
+  // 生成基于规则的任务概览分析（作为fallback）
+  const generateTaskOverviewAnalysis = (project, tasksOverview) => {
+    const completionRate = tasksOverview.percentage;
+    const totalTasks = tasksOverview.total;
+
+    let analysis = [];
+
+    if (totalTasks === 0) {
+      analysis.push("项目尚未创建任务，建议尽快制定详细的任务计划。");
+    } else if (completionRate >= 80) {
+      analysis.push("任务执行进度优秀，团队执行力强。");
+    } else if (completionRate >= 60) {
+      analysis.push("任务完成情况良好，整体推进稳定。");
+    } else if (completionRate >= 30) {
+      analysis.push("任务执行进度中等，需要加强推进力度。");
+    } else {
+      analysis.push("任务完成率偏低，建议优化执行策略。");
+    }
+
+    if (totalTasks > 20) {
+      analysis.push("任务分解细致，便于精确管理。");
+    } else if (totalTasks > 10) {
+      analysis.push("任务规划合理，管理难度适中。");
+    } else if (totalTasks > 0) {
+      analysis.push("任务数量较少，可能需要进一步细分。");
+    }
+
+    return analysis.join(" ");
+  };
+  const generateAITeamCollaboration = async (project, tasksOverview) => {
+    try {
+      const teamData = {
+        teamSize: calculateTeamMembersCount(project.id),
+        totalTasks: tasksOverview.total,
+        completedTasks: tasksOverview.completed,
+        completionRate: tasksOverview.percentage,
+        taskDistribution: tasksOverview.tasks.map(task => ({
+          title: task.title,
+          status: task.status,
+          progress: task.progress,
+          hasAssignee: !!task.assignee
+        }))
+      };
+
+      console.log('开始Coze团队合作分析，团队数据:', teamData);
+
+      const prompt = `请分析以下团队协作数据：
+
+项目名称: ${project.name}
+团队规模: ${teamData.teamSize}人
+任务总数: ${teamData.totalTasks}个
+已完成任务: ${teamData.completedTasks}个
+完成率: ${teamData.completionRate}%
+
+任务分配情况:
+${formatTaskDistribution(teamData.taskDistribution)}
+
+请从以下角度分析团队协作情况：
+1. 团队执行力评估
+2. 任务分配合理性
+3. 协作效率分析
+4. 团队建设建议
+
+请用中文回复，控制在120字以内，语言简洁专业。`;
+
+      let analysisResult = '';
+      let conversationId = null;
+
+      // 使用Coze API进行分析
+      const result = await cozeService.chatStream(
+        prompt,
+        [],
+        `user_${Date.now()}`,
+        [],
+        null,
+        (deltaContent, isCompleted) => {
+          if (deltaContent) {
+            analysisResult += deltaContent;
+          }
+        }
+      );
+
+      conversationId = result.conversationId;
+      console.log('Coze团队分析完成，对话ID:', conversationId);
+
+      // 及时关闭对话
+      if (conversationId) {
+        try {
+          await cozeService.cancelChat(conversationId, result.chatId);
+          console.log('Coze团队分析对话已关闭');
+        } catch (closeError) {
+          console.warn('关闭Coze团队分析对话失败:', closeError);
+        }
+      }
+
+      return analysisResult || '团队合作分析已完成，具体分析结果请查看详细报告。';
+
+    } catch (error) {
+      console.error('Coze团队分析失败:', error);
+      // 如果Coze分析失败，返回基于规则的分析
+      return generateTeamCollaboration(project, tasksOverview);
+    }
+  };
+
+  // 格式化任务分配情况
+  const formatTaskDistribution = (taskList) => {
+    if (!taskList || taskList.length === 0) {
+      return "暂无任务分配数据";
+    }
+
+    const statusCount = {
+      'completed': taskList.filter(t => t.status === 'completed').length,
+      'in_progress': taskList.filter(t => t.status === 'in_progress').length,
+      'pending': taskList.filter(t => t.status === 'pending').length
+    };
+
+    const assignedCount = taskList.filter(t => t.hasAssignee).length;
+
+    return `已完成: ${statusCount.completed}个, 进行中: ${statusCount.in_progress}个, 待开始: ${statusCount.pending}个, 已分配: ${assignedCount}个`;
+  };
+
+  // 获取或生成AI分析结果
+  const getAIAnalysisResults = async (projectId) => {
+    if (aiAnalysisResults[projectId]) {
+      return aiAnalysisResults[projectId];
+    }
+
+    const project = projects.find(p => p.id === projectId) || viewingProject;
+    const tasksOverview = getTasksOverview(projectId);
+
+    console.log('为项目ID', projectId, '生成AI分析');
+
+    const [projectAnalysis, teamCollaboration, taskOverviewAnalysis] = await Promise.all([
+      generateAIProjectAnalysis(project, tasksOverview),
+      generateAITeamCollaboration(project, tasksOverview),
+      generateAITaskOverviewAnalysis(project, tasksOverview)
+    ]);
+
+    const results = {
+      projectAnalysis,
+      teamCollaboration,
+      taskOverviewAnalysis
+    };
+
+    setAiAnalysisResults(prev => ({
+      ...prev,
+      [projectId]: results
+    }));
+
+    return results;
   };
 
   const handleLoginRequired = () => {
@@ -750,28 +1245,39 @@ const ProjectHall = () => {
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="项目估值">
-                ¥{viewingProject.valuation || 0}
+                {/* 项目估值暂时不填写 */}
+                <Text type="secondary">待评估</Text>
               </Descriptions.Item>
               <Descriptions.Item label="项目描述" span={2}>
                 {viewingProject.description}
               </Descriptions.Item>
               <Descriptions.Item label="团队成员">
-                {projectDetail?.members_count ?? viewingProject.members_count ?? 0} 人
+                {/* 计算任务参与者并集 */}
+                {calculateTeamMembersCount(viewingProject.id)} 人
               </Descriptions.Item>
               <Descriptions.Item label="任务数量">
-                {projectDetail?.task_count ?? viewingProject.task_count ?? 0} 个
+                {getTasksOverview(viewingProject.id).total} 个
               </Descriptions.Item>
               <Descriptions.Item label="项目进度" span={2}>
-                <Progress 
-                  percent={projectDetail?.progress ?? viewingProject.progress ?? 0} 
-                  status={(projectDetail?.status ?? viewingProject.status) === 'completed' ? 'success' : 'active'}
+                {/* 与项目详情保持一致 */}
+                <Progress
+                  percent={100}
+                  size="default"
+                  status={calculateTasksProgress(viewingProject.id) === 100 ? 'success' : 'active'}
+                  strokeColor={getProgressStrokeColor(calculateTasksProgress(viewingProject.id))}
                 />
+                <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>任务: {calculateTasksProgress(viewingProject.id)}%</span>
+                  {calculateTasksProgress(viewingProject.id) < 100 && (
+                    <span>未分配: {100 - calculateTasksProgress(viewingProject.id)}%</span>
+                  )}
+                </div>
               </Descriptions.Item>
               <Descriptions.Item label="创建时间">
                 {dayjs(viewingProject.created_at).format('YYYY-MM-DD HH:mm')}
               </Descriptions.Item>
               <Descriptions.Item label="更新时间">
-                {dayjs((projectDetail?.updated_at ?? viewingProject.updated_at)).format('YYYY-MM-DD HH:mm')}
+                {dayjs(viewingProject.updated_at).format('YYYY-MM-DD HH:mm')}
               </Descriptions.Item>
             </Descriptions>
 
@@ -779,47 +1285,32 @@ const ProjectHall = () => {
               <Row gutter={16}>
                 {/* 任务概览 */}
                 <Col span={12}>
-                  <Card size="small" title="任务概览" loading={detailLoading}>
-                    {projectDetail?.tasks?.length ? (
-                      <List
-                        size="small"
-                        dataSource={projectDetail.tasks.slice(0, 5)}
-                        renderItem={(t) => (
-                          <List.Item>
-                            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                              <span style={{ maxWidth: 200 }} title={t.title}>{t.title}</span>
-                              <Space>
-                                <Tag color={t.status === 'completed' ? 'green' : 'blue'}>
-                                  {t.status === 'completed' ? '已完成' : '进行中'}
-                                </Tag>
-                                {typeof t.task_percentage === 'number' && (
-                                  <Tag color="geekblue">{t.task_percentage}%</Tag>
-                                )}
-                              </Space>
-                            </Space>
-                          </List.Item>
-                        )}
-                      />
+                  <Card size="small" title="任务概览（AI智能分析）">
+                    {taskOverviewAnalysisLoading ? (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <div style={{ marginBottom: 8 }}>🤖 AI正在分析任务概览...</div>
+                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>正在调用AI接口分析任务执行情况</div>
+                      </div>
                     ) : (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务数据" />
+                      <Typography.Paragraph style={{ marginBottom: 8 }}>
+                        {taskOverviewAnalysisState}
+                      </Typography.Paragraph>
                     )}
                   </Card>
                 </Col>
 
                 {/* 项目分析内容 */}
                 <Col span={12}>
-                  <Card size="small" title="项目分析" loading={detailLoading}>
-                    <Typography.Paragraph style={{ marginBottom: 8 }}>
-                      {projectDetail?.analysis_content || projectDetail?.analysis_summary || '暂无项目分析内容'}
-                    </Typography.Paragraph>
-                    {projectDetail?.analytics?.metrics && (
-                      <Row gutter={8}>
-                        {projectDetail.analytics.metrics.slice(0, 3).map((m) => (
-                          <Col span={8} key={m.name}>
-                            <Statistic title={m.name} value={m.value} />
-                          </Col>
-                        ))}
-                      </Row>
+                  <Card size="small" title="项目分析（AI智能分析）">
+                    {projectAnalysisLoading ? (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <div style={{ marginBottom: 8 }}>🤖 AI正在分析项目...</div>
+                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>正在调用AI接口进行深度分析</div>
+                      </div>
+                    ) : (
+                      <Typography.Paragraph style={{ marginBottom: 8 }}>
+                        {projectAnalysisState}
+                      </Typography.Paragraph>
                     )}
                   </Card>
                 </Col>
@@ -828,47 +1319,31 @@ const ProjectHall = () => {
               <Row gutter={16} style={{ marginTop: 16 }}>
                 {/* 团队合作情况 */}
                 <Col span={12}>
-                  <Card size="small" title="团队合作情况" loading={detailLoading}>
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Space>
-                        <TeamOutlined />
-                        <Text>成员：{projectDetail?.members_count ?? viewingProject.members_count ?? 0} 人</Text>
-                      </Space>
-                      {projectDetail?.members_detail?.length ? (
-                        <Space wrap>
-                          {projectDetail.members_detail.slice(0, 6).map((m) => (
-                            <Tag key={m.user} color={m.role === 'owner' ? 'blue' : m.role === 'admin' ? 'green' : 'default'}>
-                              {m.user_name || m.username}
-                            </Tag>
-                          ))}
-                          {projectDetail.members_detail.length > 6 && (
-                            <Tag>+{projectDetail.members_detail.length - 6}</Tag>
-                          )}
-                        </Space>
-                      ) : (
-                        <Text type="secondary">暂无详细成员数据</Text>
-                      )}
-                    </Space>
+                  <Card size="small" title="团队合作情况（AI智能分析）">
+                    {teamCollaborationLoading ? (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <div style={{ marginBottom: 8 }}>🤖 AI正在分析团队合作...</div>
+                        <div style={{ fontSize: '12px', color: '#8c8c8c' }}>正在调用AI接口分析团队协作情况</div>
+                      </div>
+                    ) : (
+                      <Typography.Paragraph style={{ marginBottom: 8 }}>
+                        {teamCollaborationState}
+                      </Typography.Paragraph>
+                    )}
                   </Card>
                 </Col>
 
                 {/* 核心功能及特点 */}
                 <Col span={12}>
-                  <Card size="small" title="核心功能与特点" loading={detailLoading}>
-                    {Array.isArray(projectDetail?.features) && projectDetail.features.length > 0 ? (
+                  <Card size="small" title="核心功能与特点">
+                    {Array.isArray(viewingProject.tags) && viewingProject.tags.length > 0 ? (
                       <Space wrap>
-                        {projectDetail.features.map((f, idx) => (
-                          <Tag key={idx} color="processing">{f}</Tag>
-                        ))}
-                      </Space>
-                    ) : Array.isArray(projectDetail?.tags) && projectDetail.tags.length > 0 ? (
-                      <Space wrap>
-                        {projectDetail.tags.slice(0, 8).map((t, idx) => (
-                          <Tag key={idx}>{t}</Tag>
+                        {viewingProject.tags.map((tag, idx) => (
+                          <Tag key={idx} color="processing">{tag}</Tag>
                         ))}
                       </Space>
                     ) : (
-                      <Text type="secondary">暂无功能标签</Text>
+                      <Text type="secondary">项目创建者或管理者可在项目管理中添加核心功能描述</Text>
                     )}
                   </Card>
                 </Col>
